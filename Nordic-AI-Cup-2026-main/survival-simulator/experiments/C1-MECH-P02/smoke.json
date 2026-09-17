@@ -1,0 +1,173 @@
+[
+ {
+  "case": "signed_offset_mirrored_pivot_and_ydisp_d120",
+  "ok": true,
+  "detail": {
+   "decision_dist": 130.0,
+   "plus15": {
+    "rel_dir": -0.2617993877991496,
+    "pivot_sign": 1.0,
+    "pred_y": -10.606601717798185
+   },
+   "minus15": {
+    "rel_dir": 0.2617993877991496,
+    "pivot_sign": -1.0,
+    "pred_y": 10.606601717798185
+   }
+  }
+ },
+ {
+  "case": "signed_offset_mirrored_pivot_and_ydisp_d80",
+  "ok": true,
+  "detail": {
+   "decision_dist": 90.0,
+   "plus15": {
+    "rel_dir": -0.2617993877991496,
+    "pivot_sign": 1.0,
+    "pred_y": -10.606601717798185
+   },
+   "minus15": {
+    "rel_dir": 0.2617993877991496,
+    "pivot_sign": -1.0,
+    "pred_y": 10.606601717798185
+   }
+  }
+ },
+ {
+  "case": "zero_offset_control_exact_zero_pivot_d120",
+  "ok": true,
+  "detail": {
+   "pivot_sign": -0.0,
+   "rel_dir": 0.0
+  }
+ },
+ {
+  "case": "move_along_escape_line_first_step",
+  "ok": true,
+  "detail": {
+   "agent_xy": [
+    -10.0,
+    0.0
+   ],
+   "realized": 10.0
+  }
+ },
+ {
+  "case": "move_before_turn_ordering",
+  "ok": true,
+  "detail": {
+   "move": {
+    "requested": 10.0,
+    "rel_direction": -3.141592653589793,
+    "energy_before": 300.0,
+    "energy_after": 299.5,
+    "move_cost": 0.5,
+    "below_sprint_threshold": false,
+    "sprint_clamped": false,
+    "realized": 10.0
+   },
+   "turn": {
+    "turn": 0.0,
+    "turn_cost": 0.0
+   }
+  }
+ },
+ {
+  "case": "chase_rule_holds_under_offset_d50",
+  "ok": true,
+  "detail": [
+   [
+    60.0,
+    "chase",
+    "chase"
+   ],
+   [
+    55.0,
+    "chase",
+    "chase"
+   ],
+   [
+    50.0,
+    "chase",
+    "chase"
+   ],
+   [
+    45.0,
+    "chase",
+    "chase"
+   ],
+   [
+    40.0,
+    "chase",
+    "chase"
+   ]
+  ]
+ },
+ {
+  "case": "kill_before_sleep_and_energy_capture",
+  "ok": false,
+  "detail": {
+   "pre_kill": 38.45,
+   "post_kill": null,
+   "post_energy": 38.45,
+   "resting_post": false
+  },
+  "note": "FIRST ATTEMPT at d=20, S10_D0: no kill occurs within 5 steps (separation closes only ~1 unit/tick at this geometry), so pred_energy_post_kill was never set -- a harness fixture-choice bug (wrong d for a 5-step smoke window), not an engine defect. Kept here rather than deleted, per honesty-over-hiding-failed-checks. See the corrected re-run immediately below, run as ONE standalone episode (not a full cmd_smoke re-run) to stay within the 12-episode smoke cap: 10 (original cmd_smoke run) + 1 (ad hoc d=20 debug probe outside cmd_smoke, run while diagnosing this failure) + 1 (this corrected d=1 probe) = 12/12 used, 0 in reserve."
+ },
+ {
+  "case": "kill_before_sleep_and_energy_capture_CORRECTED_d1",
+  "ok": true,
+  "detail": {
+   "pre_kill": 38.45,
+   "post_kill": 200.0,
+   "post_energy": 200.0,
+   "resting_post": false
+  },
+  "note": "d=1 (not 20): forces a tick-1 kill (post-retreat separation 11, within the predator's single-tick move budget), letting the pre-kill/post-eat distinction (Opus B3) be exercised within the 5-step smoke cap. training/predator_mechanics_p02.py's cmd_smoke was corrected to use d=1 for this case; NOT re-executed as a full cmd_smoke run because the smoke budget is exhausted (see previous entry's note). This result was produced by a standalone one-episode call with the corrected parameter, equivalent to what a fresh cmd_smoke run would now produce for this case; the other 9 cases in this file are unchanged from that original run and were not re-verified."
+  }
+ },
+ {
+  "case": "instrumentation_noninterference_5step",
+  "ok": true,
+  "detail": [
+   "ba8250675b31",
+   "ba8250675b31"
+  ]
+ },
+ {
+  "case": "predicate_vs_observed_S15_D0_d120",
+  "ok": true,
+  "detail": [
+   [
+    "circle",
+    "circle"
+   ],
+   [
+    "circle",
+    "circle"
+   ],
+   [
+    "circle",
+    "circle"
+   ],
+   [
+    "circle",
+    "circle"
+   ],
+   [
+    "circle",
+    "circle"
+   ]
+  ]
+ },
+ {
+  "case": "no_edge_in_any_observation_across_smoke_episodes",
+  "ok": true,
+  "detail": {
+   "any_edge_in_controller_obs": false,
+   "any_edge_in_pred_obs": false,
+   "edge_avoid_eligible_ticks": 0,
+   "episodes_audited": 9
+  }
+ }
+]
