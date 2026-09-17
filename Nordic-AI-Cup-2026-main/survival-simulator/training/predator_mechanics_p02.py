@@ -324,6 +324,11 @@ def run_episode(d, ae, pe, arm, seed, mode="full", living_steps=LIVING_STEPS, po
         abytes = b"".join(_fhex(v) for v in (mv, mdir, turn))
         dg = hashlib.sha256(sb + abytes).hexdigest()
         step_digests.append(dg)
+        # Read-only snapshot of the RNG state after this tick (consumes no RNG itself), so a
+        # compat/repeat check can compare RNG progression at a specific tick index without
+        # needing to re-run or capture the live Environment object (needed once cmd_compat stops
+        # running fresh P02 episodes and instead reads this from already-produced main traces).
+        rng_hash_now = hashlib.sha256(repr(env.rng.getstate()).encode()).hexdigest()
         traj_h.update(sb + abytes)
         traj_h_norng.update(state_bytes(env, agent, pred, include_rng=False) + abytes)
         if not alive:
@@ -372,7 +377,7 @@ def run_episode(d, ae, pe, arm, seed, mode="full", living_steps=LIVING_STEPS, po
                 "pred_transition": ptrans, "pred_move": cur.get("predator_move"), "pred_turn": cur.get("predator_turn"),
                 "predator_decision": pdec, "mode": phase_mode,
                 "agent_perceived_by_pred": bool(pdec and pdec["n_agents_perceived"] > 0),
-                "agent_alive": alive, "score": env.score, "digest": dg,
+                "agent_alive": alive, "score": env.score, "digest": dg, "rng_hash": rng_hash_now,
             })
         if not alive:
             event_step = step
@@ -772,28 +777,41 @@ def _compare_ticks(ticks_a, ticks_b):
     def bump(key, err):
         max_err[key] = max(max_err.get(key, 0.0), abs(err))
 
+    def bump_angle(key, va, vb):
+        # Opus stage-2 recheck nonblocking note: P01's heading accumulator is unwrapped while
+        # P02's wraps to [-pi,pi), so a raw angle diff can show a spurious ~2*pi-scale "error"
+        # that is actually a representation artifact, not a physical discrepancy. The wrapped
+        # (smallest-signed-difference) value is what the 1e-8 tolerance is checked against; the
+        # raw value is kept alongside under "<key>_raw" for transparency, never used to fail.
+        bump(key + "_raw", va - vb)
+        bump(key, wrap(va - vb))
+
     mismatches = []
     for i in range(n):
         a, b = ticks_a[i], ticks_b[i]
         for k in ("agent_xy", "pred_xy"):
             for j in range(2):
                 bump(k, a[k][j] - b[k][j])
-        for k in ("agent_dir", "pred_dir", "agent_energy_post", "pred_energy_post"):
+        bump_angle("agent_dir", a["agent_dir"], b["agent_dir"])
+        bump_angle("pred_dir", a["pred_dir"], b["pred_dir"])
+        for k in ("agent_energy_post", "pred_energy_post"):
             bump(k, a[k] - b[k])
-        for k in ("move_distance", "move_direction", "turn_angle"):
-            bump("action_" + k, a["action"][k] - b["action"][k])
+        bump("action_move_distance", a["action"]["move_distance"] - b["action"]["move_distance"])
+        bump_angle("action_move_direction", a["action"]["move_direction"], b["action"]["move_direction"])
+        bump_angle("action_turn_angle", a["action"]["turn_angle"], b["action"]["turn_angle"])
         pa = a.get("controller_obs_predators") or []
         pb = b.get("controller_obs_predators") or []
         if pa and pb:
             bump("obs_pred_distance", pa[0]["distance"] - pb[0]["distance"])
-            bump("obs_pred_angle", pa[0]["angle"] - pb[0]["angle"])
+            bump_angle("obs_pred_angle", pa[0]["angle"], pb[0]["angle"])
         elif bool(pa) != bool(pb):
             mismatches.append([i, "controller_obs_predators_presence", bool(pa), bool(pb)])
         da, db = a.get("predator_decision"), b.get("predator_decision")
         if da and db:
-            for k in ("rel_dir", "decision_dist"):
-                if da.get(k) is not None and db.get(k) is not None:
-                    bump("decision_" + k, da[k] - db[k])
+            if da.get("rel_dir") is not None and db.get("rel_dir") is not None:
+                bump_angle("decision_rel_dir", da["rel_dir"], db["rel_dir"])
+            if da.get("decision_dist") is not None and db.get("decision_dist") is not None:
+                bump("decision_decision_dist", da["decision_dist"] - db["decision_dist"])
             ma, mb = _map_mode(da["observed_mode"], True), _map_mode(db["observed_mode"], False)
             if ma != mb:
                 mismatches.append([i, "observed_mode", ma, mb])
@@ -821,82 +839,135 @@ def _load_historical_trace(d, ae, pe, arm_p01):
         return json.load(fh)
 
 
+def _tolerance_fail(max_abs_err, tol=1e-8):
+    # "_raw" companions of angle fields are informational only (see bump_angle); never gate on them.
+    return any(v > tol for k, v in max_abs_err.items() if not k.endswith("_raw"))
+
+
+def _load_main_trace(d, ae, pe, arm, seed):
+    p = OUT / "traces" / f"d{d}_ae{ae}_pe{pe}_{arm}_s{seed}.json.gz"
+    if not p.exists():
+        return None
+    with gzip.open(p, "rt") as fh:
+        return json.load(fh)
+
+
 def cmd_compat(args):
-    """6 P01-arena/controller compatibility episodes. NOT executed in phase 1 -- code path only.
-    Fixes Opus stage-2 BLOCKING-1: full per-tick physical/discrete comparison (not just two energy
-    fields + a dead-code line), RNG-state equality via _capture_env, and a diff against the
-    historical P01 traces in the main checkout (read-only)."""
+    """6 P01-arena/controller compatibility episodes: fresh P01-arena runs ONLY. Per the human's
+    hard-cap correction, this does NOT run fresh P02 episodes (that would push the total past the
+    240-episode cap, since P01's own zero-offset compat arms are algebraically identical to P02's
+    delta=0 controller and are already run as part of main's Phase 1 representative subset).
+    Instead this compares each fresh P01 episode against the matching ALREADY-PRODUCED P02 main
+    trace (S10/S15/S20_D0, seed 0, both REP_FIXTURES), truncated to len(p01_ticks) (P01's own
+    compat cap is 100 steps/10s; P02 phase-1 runs to 300), plus the historical P01 trace in the
+    main checkout (read-only). Requires `main --phase 1` to have already been run; blocks
+    (not fails) otherwise, since that is a sequencing/missing-input problem, not a validity defect."""
     import training.predator_mechanics as p01
-    self_mod = sys.modules[__name__]
     OUT.mkdir(parents=True, exist_ok=True)
+    phase1_n = len(REP_FIXTURES) * len(ARMS)
+    order = build_main_run_order()
+    phase1_keys = {(o["d"], o["agent_energy"], o["pred_energy"], o["arm"], o["seed"]) for o in order[:phase1_n]}
     results = []
     for (d, ae, pe) in REP_FIXTURES:
         for arm_p01, p02_arm in (("F10", "S10_D0"), ("F15", "S15_D0"), ("F20", "S20_D0")):
+            if (d, ae, pe, p02_arm, REP_SEED) not in phase1_keys:
+                results.append({"fixture": [d, ae, pe], "arm_p01": arm_p01, "arm_p02": p02_arm, "status": "blocked",
+                                 "reason": "(fixture, arm, seed) is not in the predeclared main-run-order Phase 1 "
+                                           "subset -- compat requires it to have already been run there"})
+                print(f"COMPAT BLOCKED: {(d, ae, pe, p02_arm)} not in phase-1 subset; stopping.", flush=True)
+                break
+            ep_p02 = _load_main_trace(d, ae, pe, p02_arm, REP_SEED)
+            if ep_p02 is None:
+                results.append({"fixture": [d, ae, pe], "arm_p01": arm_p01, "arm_p02": p02_arm, "status": "blocked",
+                                 "reason": "main phase-1 trace not found on disk; run `main --phase 1` first"})
+                print(f"COMPAT BLOCKED: main trace for {(d, ae, pe, p02_arm)} missing; stopping.", flush=True)
+                break
             ep_p01, env_p01 = _capture_env(p01, p01.run_episode, d, ae, pe, arm_p01, REP_SEED, "full")
-            ep_p02, env_p02 = _capture_env(self_mod, run_episode, d, ae, pe, p02_arm, REP_SEED, "full",
-                                            living_steps=100, post_death_steps=0)
-            cmp_live = _compare_ticks(ep_p01["ticks"], ep_p02["ticks"])
+            n_p01 = len(ep_p01["ticks"])
+            p02_ticks_trunc = ep_p02["ticks"][:n_p01]
+            cmp_live = _compare_ticks(ep_p01["ticks"], p02_ticks_trunc)
             rng_p01 = repr(env_p01.rng.getstate()) if env_p01 else None
-            rng_p02 = repr(env_p02.rng.getstate()) if env_p02 else None
-            events_equal = (ep_p01["outcome"] == ep_p02["outcome"] and ep_p01["event_step"] == ep_p02["event_step"]
-                             and len(ep_p01["ticks"]) == len(ep_p02["ticks"]))
-            fail = (cmp_live["n_mismatches"] > 0 or any(v > 1e-8 for v in cmp_live["max_abs_err"].values())
-                    or not events_equal or rng_p01 != rng_p02)
+            rng_p01_hash = hashlib.sha256(rng_p01.encode()).hexdigest() if rng_p01 else None
+            # P02's RNG hash is read straight from the tick record added for this purpose (no
+            # fresh P02 run / no live env capture needed).
+            rng_p02_hash = p02_ticks_trunc[-1].get("rng_hash") if p02_ticks_trunc else None
+            rng_equal = rng_p01_hash is not None and rng_p01_hash == rng_p02_hash
+            if ep_p01["outcome"] == "survived_horizon":
+                p02_alive_at_cutoff = p02_ticks_trunc[-1]["agent_alive"] if p02_ticks_trunc else None
+                outcomes_consistent = bool(p02_alive_at_cutoff)
+            else:
+                outcomes_consistent = (ep_p01["event_step"] == ep_p02.get("event_step")
+                                        and ep_p01["outcome"] == ep_p02.get("outcome"))
+            fail = (cmp_live["n_mismatches"] > 0 or _tolerance_fail(cmp_live["max_abs_err"])
+                    or not outcomes_consistent or not rng_equal)
             entry = {"fixture": [d, ae, pe], "arm_p01": arm_p01, "arm_p02": p02_arm,
-                     "outcome_p01": ep_p01["outcome"], "outcome_p02": ep_p02["outcome"],
-                     "event_step_p01": ep_p01["event_step"], "event_step_p02": ep_p02["event_step"],
-                     "events_equal": events_equal, "rng_state_equal": rng_p01 == rng_p02,
-                     "live_comparison": cmp_live, "status": "fail" if fail else "pass"}
+                     "outcome_p01": ep_p01["outcome"], "outcome_p02_full_run": ep_p02.get("outcome"),
+                     "event_step_p01": ep_p01["event_step"], "event_step_p02_full_run": ep_p02.get("event_step"),
+                     "n_p01_ticks": n_p01, "outcomes_consistent": outcomes_consistent,
+                     "rng_state_equal_at_truncation": rng_equal, "live_comparison": cmp_live,
+                     "status": "fail" if fail else "pass"}
             hist = _load_historical_trace(d, ae, pe, arm_p01)
             if hist is not None:
                 cmp_hist_p01 = _compare_ticks(hist["ticks"], ep_p01["ticks"])
-                cmp_hist_p02 = _compare_ticks(hist["ticks"], ep_p02["ticks"])
+                cmp_hist_p02 = _compare_ticks(hist["ticks"], p02_ticks_trunc)
                 entry["historical_vs_fresh_p01"] = cmp_hist_p01
-                entry["historical_vs_p02"] = cmp_hist_p02
-                if cmp_hist_p01["n_mismatches"] > 0 or any(v > 1e-8 for v in cmp_hist_p01["max_abs_err"].values()):
+                entry["historical_vs_p02_main_trace"] = cmp_hist_p02
+                if cmp_hist_p01["n_mismatches"] > 0 or _tolerance_fail(cmp_hist_p01["max_abs_err"]):
                     entry["status"] = "fail"
             else:
                 entry["historical_trace"] = f"not found at {P01_MAIN_TRACES} (read-only main checkout)"
             results.append(entry)
-            if entry["status"] == "fail":
-                print(f"COMPAT FAIL at fixture={(d, ae, pe)} arm={arm_p01}/{p02_arm}; stopping remaining compat matrix, preserving evidence.", flush=True)
+            if entry["status"] != "pass":
+                print(f"COMPAT {entry['status'].upper()} at fixture={(d, ae, pe)} arm={arm_p01}/{p02_arm}; "
+                      f"stopping remaining compat matrix, preserving evidence.", flush=True)
                 break
         else:
             continue
         break
     json.dump(results, open(OUT / "compat.json", "w"), indent=1, default=_jsonable)
-    n_fail = sum(1 for r in results if r["status"] == "fail")
-    print(f"compat pairs_run={len(results)} (of 6 planned) failures={n_fail}")
+    n_nonpass = sum(1 for r in results if r["status"] != "pass")
+    print(f"compat pairs_evaluated={len(results)} (of 6 planned); fresh P01 episodes used={sum(1 for r in results if 'live_comparison' in r)}; non-pass={n_nonpass}")
 
 
 def cmd_main(args):
+    """--phase 1 runs the predeclared representative-subset-first slice of the run order
+    (REP_FIXTURES x all 9 arms x seed 0 -- exactly the 6 zero-offset cases `compat` needs, plus
+    the signed-offset cases for those same 2 fixtures); --phase 2 runs everything else;
+    --phase all (default) runs the full predeclared order. Episodes already present (by digest
+    key AND trace file, so a partial/corrupt prior write is retried) are never rerun, regardless
+    of phase -- this is what makes running phase 1 then phase 2 later equal exactly one pass over
+    the 216-episode order, not 216 + 18 (per the human's hard-cap correction)."""
     OUT.mkdir(parents=True, exist_ok=True)
     tdir = OUT / "traces"
     tdir.mkdir(exist_ok=True)
     order = build_main_run_order()
-    rows, digests = [], {}
+    phase1_n = len(REP_FIXTURES) * len(ARMS)
+    sub_order = {"1": order[:phase1_n], "2": order[phase1_n:], "all": order}[args.phase]
+    digests_path = OUT / "digests_main.json"
+    digests = json.load(open(digests_path)) if digests_path.exists() else {}
     t0 = time.perf_counter()
-    n = 0
-    for item in order:
+    n_run = n_skipped = 0
+    for item in sub_order:
+        key = f"{item['d']}|{item['agent_energy']}|{item['pred_energy']}|{item['arm']}|{item['seed']}"
+        name = f"d{item['d']}_ae{item['agent_energy']}_pe{item['pred_energy']}_{item['arm']}_s{item['seed']}.json.gz"
+        if key in digests and (tdir / name).exists():
+            n_skipped += 1
+            continue
         if time.perf_counter() - t0 > args.sim_cap_sec:
             print("SIM CAP REACHED; stopping", flush=True)
             break
         ep = run_episode(item["d"], item["agent_energy"], item["pred_energy"], item["arm"], item["seed"], "full")
-        n += 1
-        name = f"d{item['d']}_ae{item['agent_energy']}_pe{item['pred_energy']}_{item['arm']}_s{item['seed']}.json.gz"
+        n_run += 1
         with gzip.open(tdir / name, "wt") as f:
             json.dump(ep, f, default=_jsonable)
-        rows.append(summarize(ep))
-        key = f"{item['d']}|{item['agent_energy']}|{item['pred_energy']}|{item['arm']}|{item['seed']}"
-        digests[key] = {k: ep[k] for k in ("trajectory_digest", "trajectory_digest_norng", "final_state_digest", "initial_state_hash", "initial_rng_hash", "outcome", "final_score")}
-    import csv
-    if rows:
-        with open(OUT / "summary.csv", "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-            w.writeheader()
-            w.writerows(rows)
-    json.dump(digests, open(OUT / "digests_main.json", "w"), indent=1)
-    print(f"main episodes={n} sim_wall={time.perf_counter()-t0:.1f}s", flush=True)
+        digests[key] = {k: ep[k] for k in ("trajectory_digest", "trajectory_digest_norng", "final_state_digest",
+                                            "initial_state_hash", "initial_rng_hash", "outcome", "final_score",
+                                            "event_step", "death_step", "steps_run")}
+        json.dump(digests, open(digests_path, "w"), indent=1)  # incremental save: a cap/crash mid-phase keeps progress
+    # summary.csv is regenerated from ALL traces on disk by analyze.py (analysis, not simulation),
+    # so it always reflects every phase run so far without cmd_main needing to merge partial CSVs.
+    print(f"main phase={args.phase} episodes_run={n_run} episodes_skipped_already_done={n_skipped} "
+          f"sim_wall={time.perf_counter()-t0:.1f}s", flush=True)
 
 
 def cmd_repeat(args):
@@ -916,6 +987,10 @@ if __name__ == "__main__":
     p.add_argument("cmd", choices=["emit-config", "smoke", "main", "compat", "repeat"])
     p.add_argument("--tag", default="repeat")
     p.add_argument("--sim-cap-sec", type=float, default=240.0)
+    p.add_argument("--phase", choices=["1", "2", "all"], default="all",
+                    help="main only: '1'=predeclared representative subset (18 eps, incl. the 6 "
+                         "compat needs), '2'=remaining 198, 'all'=full 216-episode order. "
+                         "Episodes already on disk (by digest key + trace file) are never rerun.")
     a = p.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     {"emit-config": cmd_emit_config, "smoke": cmd_smoke, "main": cmd_main,
