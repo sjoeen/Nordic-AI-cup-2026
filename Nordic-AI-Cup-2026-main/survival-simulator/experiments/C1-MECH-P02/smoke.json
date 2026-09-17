@@ -124,7 +124,6 @@
    "resting_post": false
   },
   "note": "d=1 (not 20): forces a tick-1 kill (post-retreat separation 11, within the predator's single-tick move budget), letting the pre-kill/post-eat distinction (Opus B3) be exercised within the 5-step smoke cap. training/predator_mechanics_p02.py's cmd_smoke was corrected to use d=1 for this case; NOT re-executed as a full cmd_smoke run because the smoke budget is exhausted (see previous entry's note). This result was produced by a standalone one-episode call with the corrected parameter, equivalent to what a fresh cmd_smoke run would now produce for this case; the other 9 cases in this file are unchanged from that original run and were not re-verified."
-  }
  },
  {
   "case": "instrumentation_noninterference_5step",
