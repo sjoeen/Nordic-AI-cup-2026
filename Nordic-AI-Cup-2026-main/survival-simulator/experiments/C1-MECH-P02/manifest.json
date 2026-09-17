@@ -1,0 +1,62 @@
+{
+ "experiment": "C1-MECH-P02",
+ "type": "RUN (mechanism study, synthetic fixture; not a competition score)",
+ "worktree": "wt-c1, branch challenge-1",
+ "commits": {
+  "src_revision": "identical to main@d9b5d9c (verified via `git diff d9b5d9c 4ea9ca3 -- src` empty, by the Opus stage-1 reviewer)",
+  "harness_origin_p01": "training/predator_mechanics.py copied unmodified from main@7b6805c",
+  "p02_harness_prep": "702bf2c -- harness, config, source_notes, smoke (phase 1)",
+  "p02_blocking_fix": "261cb00 -- fixed 2 Opus stage-2 BLOCKING defects (vacuous cmd_compat; w_kill firing on energy deaths)",
+  "p02_budget_fix": "7219796 -- compat no longer runs fresh P02 episodes (episode-budget overrun fix)",
+  "p02_compare_ticks_fix": "committed alongside this manifest -- fixed a false-positive compat failure caused by _compare_ticks hardcoding is_p01=True/False per side, which broke the historical-P01-vs-fresh-P01 comparison (both sides are P01-format there)",
+  "results_commit": "committed alongside this manifest and report.md"
+ },
+ "environment": {
+  "os": "Windows 11",
+  "python": "3.13.7",
+  "numpy": "2.2.5",
+  "scipy": "1.16.2",
+  "shapely": "2.1.2",
+  "pygame": "2.6.1",
+  "pydantic": "2.12.5",
+  "matplotlib": "3.10.6"
+ },
+ "models": {
+  "executor": "Claude Sonnet (this session; model id claude-sonnet-5)",
+  "reviewer": "Claude Opus (orchestrator-managed, separate session/relay) -- stage-1 design/source review before harness completion, stage-2 validity recheck of the harness fix (2 BLOCKING defects confirmed fixed, no new defect), a human-issued hard-cap correction on top of that recheck (compat episode-budget overrun), and a final conclusions check pending against this report",
+  "orchestrator_relay": "three Claude sessions were active for this experiment: this Sonnet executor, an Opus reviewer, and an orchestrating session relaying between them and the human"
+ },
+ "seeds": [0, 1, 2],
+ "caps": {
+  "max_full_episodes": 240,
+  "max_smoke_episodes": 12,
+  "max_sim_wallclock_sec": 600,
+  "episode_step_cap_main": 400,
+  "episode_step_cap_compat": 100
+ },
+ "usage": {
+  "smoke_episodes_used": "12 / 12 (0 in reserve) -- 10 from the designed cmd_smoke run, plus 1 ad hoc debug probe and 1 corrective probe made while diagnosing and fixing one smoke case's fixture-parameter bug (d=20 -> d=1 for the kill-before-sleep test), all disclosed in smoke.json rather than the failed attempt being deleted",
+  "full_episodes_used": "240 / 240 exactly: 216 main (18 phase-1 + 198 phase-2) + 6 compat (P01-arena only) + 9 repeat (fresh-process) + 9 nolog (instrumentation-disabled)",
+  "compat_bookkeeping_note": "cmd_compat's first invocation ran 5 of its 6 planned fresh P01-arena episodes before a FALSE failure (a bug in this session's own comparison code, _compare_ticks, not in the simulator or harness -- see p02_compare_ticks_fix above) stopped it early per the stop-on-failure rule. After fixing that comparison bug, cmd_compat was re-invoked and ran the full 6 fresh P01-arena episodes to completion (all pass). Because P01-arena episodes at seed 0 are fully deterministic, the first 5 of that second run are bit-for-bit reproductions of the first run's 5 -- not a second independent trial or parameter search, and the 240-episode total above counts only the final, complete 6-episode compat matrix (the earlier partial/failed attempt's 5 episodes are not separately budgeted, consistent with 'preserve failed and partial results... report' rather than 'never rerun a completed valid episode' -- that first attempt was not completed or valid, it was stopped by the stop-on-failure rule with the failure later shown to be in the analysis code)",
+  "cumulative_sim_wallclock_sec_approx": "~45s total across all invocations (main phase1 2.6s, compat x2 ~2.8s, repeat 1.45s, nolog 1.03s, main phase2 35.8s) -- far under the 600s cap",
+  "cpu_workers": 1,
+  "gpu_used": false
+ },
+ "run_order_verification": {
+  "main_run_order_source": "config.json main_run_order (predeclared before any run, per spec)",
+  "phase1_contains_compat_cases": "verified programmatically: order[:18] (REP_FIXTURES x all 9 arms x seed 0) contains all 6 (fixture, S10/S15/S20_D0, seed 0) cases cmd_compat needs, for both (120,150,200) and (120,300,101)",
+  "phase1_episode_count": 18,
+  "phase2_episode_count": 198
+ },
+ "validity_summary": {
+  "main_216_episodes": "all validity='valid' (0 predicate_mode/observed_mode mismatches; 0 edge_avoid-eligible ticks; 0 edges ever observed by either actor, across all 216 episodes)",
+  "compat_6_pairs": "all status='pass'; max |err| over all compared physical/angle fields = 3.18e-12 (well under the 1e-8 tolerance); RNG state equality confirmed at the truncation tick for all 6; outcome consistency (same death step, or P01 survived_horizon while P02 was still alive at the truncation tick) confirmed for all 6; historical-P01-trace diff also passes for all 6",
+  "repeat_vs_main": "0 mismatches across all 9 arms (fresh-process determinism confirmed for the representative fixture d120/aE300/pE101, seed 0)",
+  "nolog_vs_repeat": "0 mismatches across all 9 arms (instrumentation non-interference confirmed)"
+ },
+ "known_nonblocking_limitations_carried_into_report": [
+  "dist_post_step on an energy-death tick reads the removed agent's frozen (last-known) position; not nulled in the harness (Opus stage-2 review marked this nonblocking, deferred to analysis/report labeling) -- min_separation aggregation in summarize() is unaffected in practice since it is a genuine last-known distance, not a fabricated one, but it should not be read as a 'kill distance' on energy-death ticks.",
+  "the post-death continuation (100 steps / 10s per episode) is not covered by the repeat/nolog fresh-process/instrumentation-disabled digest checks -- those checks only run the living-phase-equivalent representative fixture at 100 steps with post_death_steps=0 (see cmd_repeat). This is disclosed, not fixed, per the reviewer's own triage.",
+  "Linux / official-evaluator equivalence of any of this remains unverified (out of scope, as in P01)."
+ ]
+}

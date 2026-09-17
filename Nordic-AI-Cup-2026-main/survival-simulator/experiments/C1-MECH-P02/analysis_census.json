@@ -1,0 +1,207 @@
+{
+ "predicate_vs_observed": {
+  "match": 21493,
+  "mismatch": 0
+ },
+ "circle_ticks_by_speed_pivotsign_reldirzero": {
+  "(10.0, -0.0, True)": 120,
+  "(10.0, 1.0, False)": 264,
+  "(10.0, -1.0, False)": 264,
+  "(15.0, -0.0, True)": 1188,
+  "(15.0, 1.0, False)": 1673,
+  "(15.0, -1.0, False)": 1673,
+  "(20.0, -0.0, True)": 606,
+  "(20.0, 1.0, False)": 876,
+  "(20.0, -1.0, False)": 1001
+ },
+ "rel_dir_distribution_deg": {
+  "n": 7665,
+  "mean": 0.6056807942061534,
+  "std": 20.261573982207352,
+  "median": 0.0,
+  "min": -63.028810123637804,
+  "max": 63.028810123637804
+ },
+ "pivot_sign_changes_total": 0,
+ "agent_side_perception_losses": 117,
+ "agent_side_reacquisitions": 18,
+ "predator_side_perception_losses": 120,
+ "predator_side_reacquisitions": 22,
+ "time_in_mode_sec": {
+  "circle": 766.5000000001057,
+  "chase": 306.30000000000115,
+  "sleep": 277.69999999999465,
+  "wander": 1076.5000000001164
+ },
+ "episodes_censused": 216,
+ "after_contact_perception_loss_events": 99,
+ "after_contact_sample": [
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 0,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 1,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 2,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D-15",
+   "seed": 0,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D-15",
+   "seed": 1,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D-15",
+   "seed": 2,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D+15",
+   "seed": 0,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D+15",
+   "seed": 1,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D+15",
+   "seed": 2,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D-15",
+   "seed": 0,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D-15",
+   "seed": 1,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S20_D-15",
+   "seed": 2,
+   "first_pred_perception_loss": 13.1,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D0",
+   "seed": 0,
+   "first_pred_perception_loss": 6.4,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D0",
+   "seed": 1,
+   "first_pred_perception_loss": 6.4,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D0",
+   "seed": 2,
+   "first_pred_perception_loss": 6.4,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 0,
+   "first_pred_perception_loss": 4.8,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 1,
+   "first_pred_perception_loss": 4.8,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D+15",
+   "seed": 2,
+   "first_pred_perception_loss": 4.8,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D-15",
+   "seed": 0,
+   "first_pred_perception_loss": 4.8,
+   "outcome": "energy_death"
+  },
+  {
+   "d": 80,
+   "arm": "S15_D-15",
+   "seed": 1,
+   "first_pred_perception_loss": 4.8,
+   "outcome": "energy_death"
+  }
+ ],
+ "post_death_summary": {
+  "episodes_with_post_death_phase": 216,
+  "post_death_min_dist_to_ref": {
+   "n": 216,
+   "mean": 1048.3824585360162,
+   "std": 774.0305883394352,
+   "median": 630.4278679427468,
+   "min": 141.0,
+   "max": 2336.7436850855797
+  },
+  "post_death_wake_events": {
+   "n": 216,
+   "mean": 0.018518518518518517,
+   "std": 0.13513001363761487,
+   "median": 0.0,
+   "min": 0.0,
+   "max": 1.0
+  },
+  "post_death_sleep_events": {
+   "n": 216,
+   "mean": 0.14814814814814814,
+   "std": 0.35607197638770693,
+   "median": 0.0,
+   "min": 0.0,
+   "max": 1.0
+  }
+ }
+}

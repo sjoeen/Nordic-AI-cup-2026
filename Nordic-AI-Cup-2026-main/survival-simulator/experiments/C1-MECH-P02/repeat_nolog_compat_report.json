@@ -1,0 +1,29 @@
+{
+ "repeat_vs_main": {
+  "arms_checked": 9,
+  "mismatches": [],
+  "status": "checked"
+ },
+ "nolog_vs_repeat": {
+  "arms_checked": 9,
+  "mismatches": [],
+  "status": "checked"
+ },
+ "compat": {
+  "pairs_evaluated": 6,
+  "pairs_planned": 6,
+  "max_abs_err_over_all_fields": 3.183231456205249e-12,
+  "n_pass": 6,
+  "n_nonpass": 0,
+  "n_live_mismatches_total": 0,
+  "statuses": [
+   "pass",
+   "pass",
+   "pass",
+   "pass",
+   "pass",
+   "pass"
+  ],
+  "status": "checked"
+ }
+}
