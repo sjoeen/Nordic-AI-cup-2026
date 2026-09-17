@@ -6,3 +6,4 @@ training/checkpoints/
 logs/
 .pytest_cache/
 .ipynb_checkpoints/
+.env
