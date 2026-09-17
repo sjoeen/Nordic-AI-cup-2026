@@ -1,3 +1,5 @@
 pillow
 pytest
 pandas
+imageio
+imageio-ffmpeg

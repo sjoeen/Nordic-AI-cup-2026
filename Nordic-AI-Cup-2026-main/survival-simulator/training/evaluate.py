@@ -5,12 +5,15 @@ Scored multi-seed evaluation. Run as a fresh process (never inside a long-lived 
         --seeds 0 1 2 3 4 --workers 4 --max-wall-sec 1800
 
 Writes results/<run_id>.csv (one row per seed) and appends one row to results/index.csv.
+--dry-run (or env EVAL_DRY_RUN=1) runs everything but writes nothing: use it to smoke-test a
+new machine/kernel without polluting the append-only index.
 """
 import argparse
 import csv
 import datetime
 import hashlib
 import json
+import os
 import platform
 import statistics
 import subprocess
@@ -36,10 +39,18 @@ def config_hash(config: dict) -> str:
 def git_revision() -> str:
     try:
         rev = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True).strip()
-        dirty = subprocess.check_output(["git", "status", "--porcelain", "--", "."], cwd=ROOT, text=True).strip()
+        # results/ and logs/ are run outputs, not code: they must not mark the revision dirty
+        dirty = subprocess.check_output(["git", "status", "--porcelain", "--", ".", ":!results", ":!logs"],
+                                        cwd=ROOT, text=True).strip()
         return rev + ("-dirty" if dirty else "")
     except Exception:
         return "unknown"
+
+
+def environment_info() -> str:
+    from importlib.metadata import version
+    pkgs = " ".join(f"{p}={version(p)}" for p in ("numpy", "scipy", "shapely", "pygame", "pydantic"))
+    return f"python={platform.python_version()} exe={sys.executable} {pkgs}"
 
 
 def _worker(job):
@@ -50,16 +61,20 @@ def _worker(job):
 
 
 def evaluate(experiment_id: str, config_path: str, seeds, workers: int = 1, max_wall_sec: float = None,
-             notes: str = "") -> dict:
+             notes: str = "", dry_run: bool = False) -> dict:
+    dry_run = dry_run or os.environ.get("EVAL_DRY_RUN") == "1"
     config = json.loads(Path(config_path).read_text())
     chash = config_hash(config)
     rev = git_revision()
     run_id = f"{experiment_id}_{config['name']}_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    RESULTS.mkdir(exist_ok=True)
-    if rev.endswith("-dirty"):
+    if dry_run:
+        run_id = "DRYRUN_" + run_id
+        print("DRY RUN: nothing will be written to results/")
+    elif rev.endswith("-dirty"):
         print(f"WARNING: uncommitted changes (revision {rev}); commit before scored runs.", file=sys.stderr)
 
     print(f"run_id={run_id} config={config_path} hash={chash} rev={rev} seeds={list(seeds)} workers={workers}")
+    print(environment_info())
     t0 = time.time()
     jobs = [(config, s, max_wall_sec) for s in seeds]
     rows = []
@@ -78,10 +93,12 @@ def evaluate(experiment_id: str, config_path: str, seeds, workers: int = 1, max_
     wall = time.time() - t0
     rows.sort(key=lambda r: r["seed"])
 
-    with open(RESULTS / f"{run_id}.csv", "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
+    if not dry_run:
+        RESULTS.mkdir(exist_ok=True)
+        with open(RESULTS / f"{run_id}.csv", "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            w.writeheader()
+            w.writerows(rows)
 
     scores = [r["score"] for r in rows]
     statuses = {r["status"] for r in rows}
@@ -102,17 +119,19 @@ def evaluate(experiment_id: str, config_path: str, seeds, workers: int = 1, max_
         "override_count": 0,  # no override/emergency layer exists yet
         "wall_clock_sec": round(wall, 1),
         "status": "ok" if statuses == {"ok"} else "+".join(sorted(statuses)),
-        "notes": f"rev={rev}; os={platform.system()}; config={config_path}; {notes}".strip("; "),
+        "notes": f"rev={rev}; os={platform.system()}; {environment_info()}; config={config_path}; {notes}".strip("; "),
     }
+    print(f"mean={summary['mean_raw_score']} std={summary['std_raw_score']} median={summary['median_raw_score']} "
+          f"min={summary['min_raw_score']} max={summary['max_raw_score']} n={len(scores)} wall={wall:.0f}s")
+    if dry_run:
+        print("DRY RUN: results not written")
+        return {"summary": summary, "rows": rows}
     new_index = not INDEX.exists()
     with open(INDEX, "a", newline="") as f:
         w = csv.DictWriter(f, fieldnames=INDEX_FIELDS)
         if new_index:
             w.writeheader()
         w.writerow(summary)
-
-    print(f"mean={summary['mean_raw_score']} std={summary['std_raw_score']} median={summary['median_raw_score']} "
-          f"min={summary['min_raw_score']} max={summary['max_raw_score']} n={len(scores)} wall={wall:.0f}s")
     print(f"wrote {RESULTS / (run_id + '.csv')} and appended {INDEX}")
     return {"summary": summary, "rows": rows}
 
@@ -125,8 +144,9 @@ def main():
     p.add_argument("--workers", type=int, default=1)
     p.add_argument("--max-wall-sec", type=float, default=None, help="per-game wall-clock cap")
     p.add_argument("--notes", default="")
+    p.add_argument("--dry-run", action="store_true", help="run but write nothing (smoke test)")
     a = p.parse_args()
-    evaluate(a.experiment, a.config, a.seeds, a.workers, a.max_wall_sec, a.notes)
+    evaluate(a.experiment, a.config, a.seeds, a.workers, a.max_wall_sec, a.notes, a.dry_run)
 
 
 if __name__ == "__main__":
