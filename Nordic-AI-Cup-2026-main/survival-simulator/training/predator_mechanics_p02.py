@@ -767,7 +767,7 @@ def _map_mode(mode, is_p01):
     return "wander" if (is_p01 and mode == "no_target") else mode
 
 
-def _compare_ticks(ticks_a, ticks_b):
+def _compare_ticks(ticks_a, ticks_b, is_p01_a=True, is_p01_b=False):
     """Per-tick comparison per Opus stage-2 review: |err|<=1e-8 for physical quantities (reports
     actual max error), exact equality for discrete mode/event fields. ticks_a is P01, ticks_b is
     P02 (or historical-vs-fresh, either order is symmetric for these checks)."""
@@ -812,14 +812,14 @@ def _compare_ticks(ticks_a, ticks_b):
                 bump_angle("decision_rel_dir", da["rel_dir"], db["rel_dir"])
             if da.get("decision_dist") is not None and db.get("decision_dist") is not None:
                 bump("decision_decision_dist", da["decision_dist"] - db["decision_dist"])
-            ma, mb = _map_mode(da["observed_mode"], True), _map_mode(db["observed_mode"], False)
+            ma, mb = _map_mode(da["observed_mode"], is_p01_a), _map_mode(db["observed_mode"], is_p01_b)
             if ma != mb:
                 mismatches.append([i, "observed_mode", ma, mb])
             if da.get("pivot_sign") != db.get("pivot_sign"):
                 mismatches.append([i, "pivot_sign", da.get("pivot_sign"), db.get("pivot_sign")])
         elif bool(da) != bool(db):
             mismatches.append([i, "predator_decision_presence", bool(da), bool(db)])
-        ma_mode, mb_mode = _map_mode(a["mode"], True), _map_mode(b["mode"], False)
+        ma_mode, mb_mode = _map_mode(a["mode"], is_p01_a), _map_mode(b["mode"], is_p01_b)
         if ma_mode != mb_mode:
             mismatches.append([i, "mode", ma_mode, mb_mode])
         if a.get("pred_transition") != b.get("pred_transition"):
@@ -908,8 +908,11 @@ def cmd_compat(args):
                      "status": "fail" if fail else "pass"}
             hist = _load_historical_trace(d, ae, pe, arm_p01)
             if hist is not None:
-                cmp_hist_p01 = _compare_ticks(hist["ticks"], ep_p01["ticks"])
-                cmp_hist_p02 = _compare_ticks(hist["ticks"], p02_ticks_trunc)
+                # hist and ep_p01 are BOTH P01-format traces (is_p01_b=True here, unlike the
+                # live/hist-vs-p02 comparisons) -- this is the bug that produced a false
+                # wander/no_target "mismatch" on the first compat run; see commit history.
+                cmp_hist_p01 = _compare_ticks(hist["ticks"], ep_p01["ticks"], is_p01_a=True, is_p01_b=True)
+                cmp_hist_p02 = _compare_ticks(hist["ticks"], p02_ticks_trunc, is_p01_a=True, is_p01_b=False)
                 entry["historical_vs_fresh_p01"] = cmp_hist_p01
                 entry["historical_vs_p02_main_trace"] = cmp_hist_p02
                 if cmp_hist_p01["n_mismatches"] > 0 or _tolerance_fail(cmp_hist_p01["max_abs_err"]):
