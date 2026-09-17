@@ -241,12 +241,18 @@ def run_episode(d, ae, pe, arm, seed, mode="full", living_steps=LIVING_STEPS, po
             return r
 
         def w_kill(victim):
-            # Called from environment.py's predator kill loop AFTER predator.energy has
-            # already been incremented by the eaten agent's energy (capped at max_energy),
-            # but BEFORE the agent is actually removed from env.agents. Captures post-eat
-            # predator energy distinctly from the pre-kill snapshot above.
-            cur["post_kill_energy"] = pred.energy
-            cur["killed_agent_energy_pre_removal"] = victim.energy
+            # env.kill_agent is ALSO called by the agent-side energy-drain check
+            # (environment.py L642-644), which runs in the agent block, strictly before the
+            # predator block (and its predator.step call) executes this tick. Only treat this as
+            # an actual predator kill (and thus log pre-kill/post-eat energy) when this tick's
+            # predator decision has already been recorded -- Opus stage-2 review BLOCKING-2:
+            # without this guard, an energy death would be misread as a kill with unchanged
+            # ("pre==post") predator energy.
+            if "predator_decision" in cur:
+                cur["post_kill_energy"] = pred.energy
+                cur["killed_agent_energy_pre_removal"] = victim.energy
+            else:
+                cur["energy_death_removal"] = True
             return orig_kill(victim)
 
         def w_pstep(observation):
@@ -360,6 +366,7 @@ def run_episode(d, ae, pe, arm, seed, mode="full", living_steps=LIVING_STEPS, po
                 "pred_energy_pre_kill": cur.get("pred_energy_pre_kill"),
                 "pred_energy_post_kill": cur.get("post_kill_energy"),
                 "killed_agent_energy_pre_removal": cur.get("killed_agent_energy_pre_removal"),
+                "energy_death_removal": cur.get("energy_death_removal", False),
                 "pred_energy_post": pred.energy,
                 "pred_resting_pre": pre["pred_resting"], "pred_resting_post": pred.resting,
                 "pred_transition": ptrans, "pred_move": cur.get("predator_move"), "pred_turn": cur.get("predator_turn"),
@@ -503,7 +510,11 @@ def summarize(ep):
     # Pre-kill vs post-eat predator energy, and predator/agent state at the kill tick (spec S4,
     # Opus B3): "before" = last pre-kill snapshot on the tick that killed the agent (after the
     # predator's own move/turn cost, before eating); "after" = same tick, after eating.
-    kill_tick = next((t for t in T if t.get("pred_energy_post_kill") is not None), None)
+    # Guarded by outcome=="captured" (Opus B3/BLOCKING-2 recheck): w_kill now only sets
+    # pred_energy_post_kill for an actual predator kill, never for an energy-death removal, but
+    # this extra guard keeps summarize() correct even if a future harness edit loosens that.
+    kill_tick = (next((t for t in T if t.get("pred_energy_post_kill") is not None), None)
+                 if ep["outcome"] == "captured" else None)
     s["pred_energy_at_kill_pre"] = kill_tick["pred_energy_pre_kill"] if kill_tick else None
     s["pred_energy_at_kill_post"] = kill_tick["pred_energy_post_kill"] if kill_tick else None
     s["pred_xy_at_kill"] = kill_tick["pred_xy"] if kill_tick else None
@@ -724,30 +735,138 @@ def cmd_smoke(args):
     print(f"smoke cases: {len(res)}, failures: {n_fail}, episodes used: {used_episodes[0]} (budget 12, reserve kept: {12 - used_episodes[0]})")
 
 
+def _capture_env(module, fn, *args, **kwargs):
+    """Runs fn (a run_episode) with module.build_env temporarily wrapped so the constructed
+    Environment (and its rng) is captured for a post-hoc RNG-state comparison. module.build_env
+    is restored unconditionally. fn must call the unqualified name `build_env` at module-global
+    scope (true for both training.predator_mechanics.run_episode and this module's run_episode)."""
+    orig = module.build_env
+    captured = {}
+
+    def wrapped(*a, **k):
+        result = orig(*a, **k)
+        captured["env"] = result[0]
+        return result
+
+    module.build_env = wrapped
+    try:
+        ep = fn(*args, **kwargs)
+    finally:
+        module.build_env = orig
+    return ep, captured.get("env")
+
+
+def _map_mode(mode, is_p01):
+    # P01 has no edge_avoid/wander split; its single "no_target" corresponds to P02's "wander"
+    # (P02's compat fixtures/geometry never reach the edge_avoid branch -- see source_notes.md B4).
+    return "wander" if (is_p01 and mode == "no_target") else mode
+
+
+def _compare_ticks(ticks_a, ticks_b):
+    """Per-tick comparison per Opus stage-2 review: |err|<=1e-8 for physical quantities (reports
+    actual max error), exact equality for discrete mode/event fields. ticks_a is P01, ticks_b is
+    P02 (or historical-vs-fresh, either order is symmetric for these checks)."""
+    n = min(len(ticks_a), len(ticks_b))
+    max_err = {}
+
+    def bump(key, err):
+        max_err[key] = max(max_err.get(key, 0.0), abs(err))
+
+    mismatches = []
+    for i in range(n):
+        a, b = ticks_a[i], ticks_b[i]
+        for k in ("agent_xy", "pred_xy"):
+            for j in range(2):
+                bump(k, a[k][j] - b[k][j])
+        for k in ("agent_dir", "pred_dir", "agent_energy_post", "pred_energy_post"):
+            bump(k, a[k] - b[k])
+        for k in ("move_distance", "move_direction", "turn_angle"):
+            bump("action_" + k, a["action"][k] - b["action"][k])
+        pa = a.get("controller_obs_predators") or []
+        pb = b.get("controller_obs_predators") or []
+        if pa and pb:
+            bump("obs_pred_distance", pa[0]["distance"] - pb[0]["distance"])
+            bump("obs_pred_angle", pa[0]["angle"] - pb[0]["angle"])
+        elif bool(pa) != bool(pb):
+            mismatches.append([i, "controller_obs_predators_presence", bool(pa), bool(pb)])
+        da, db = a.get("predator_decision"), b.get("predator_decision")
+        if da and db:
+            for k in ("rel_dir", "decision_dist"):
+                if da.get(k) is not None and db.get(k) is not None:
+                    bump("decision_" + k, da[k] - db[k])
+            ma, mb = _map_mode(da["observed_mode"], True), _map_mode(db["observed_mode"], False)
+            if ma != mb:
+                mismatches.append([i, "observed_mode", ma, mb])
+            if da.get("pivot_sign") != db.get("pivot_sign"):
+                mismatches.append([i, "pivot_sign", da.get("pivot_sign"), db.get("pivot_sign")])
+        elif bool(da) != bool(db):
+            mismatches.append([i, "predator_decision_presence", bool(da), bool(db)])
+        ma_mode, mb_mode = _map_mode(a["mode"], True), _map_mode(b["mode"], False)
+        if ma_mode != mb_mode:
+            mismatches.append([i, "mode", ma_mode, mb_mode])
+        if a.get("pred_transition") != b.get("pred_transition"):
+            mismatches.append([i, "pred_transition", a.get("pred_transition"), b.get("pred_transition")])
+        if a["agent_alive"] != b["agent_alive"]:
+            mismatches.append([i, "agent_alive", a["agent_alive"], b["agent_alive"]])
+    return {"common_ticks": n, "len_a": len(ticks_a), "len_b": len(ticks_b),
+            "truncated_at_earlier_death": len(ticks_a) != len(ticks_b),
+            "max_abs_err": max_err, "n_mismatches": len(mismatches), "mismatches": mismatches[:50]}
+
+
+def _load_historical_trace(d, ae, pe, arm_p01):
+    p = P01_MAIN_TRACES / f"d{d}_ae{ae}_pe{pe}_{arm_p01}_s0.json.gz"
+    if not p.exists():
+        return None
+    with gzip.open(p, "rt") as fh:
+        return json.load(fh)
+
+
 def cmd_compat(args):
-    """6 P01-arena/controller compatibility episodes. NOT executed in phase 1 -- code path only."""
+    """6 P01-arena/controller compatibility episodes. NOT executed in phase 1 -- code path only.
+    Fixes Opus stage-2 BLOCKING-1: full per-tick physical/discrete comparison (not just two energy
+    fields + a dead-code line), RNG-state equality via _capture_env, and a diff against the
+    historical P01 traces in the main checkout (read-only)."""
     import training.predator_mechanics as p01
+    self_mod = sys.modules[__name__]
     OUT.mkdir(parents=True, exist_ok=True)
     results = []
     for (d, ae, pe) in REP_FIXTURES:
-        for arm, p02_arm in (("F10", "S10_D0"), ("F15", "S15_D0"), ("F20", "S20_D0")):
-            ep_p01 = p01.run_episode(d, ae, pe, arm, REP_SEED, "full")
-            ep_p02 = run_episode(d, ae, pe, p02_arm, REP_SEED, "full", living_steps=100, post_death_steps=0)
-            n = min(len(ep_p01["ticks"]), len(ep_p02["ticks"]))
-            max_err = 0.0
-            mismatches = []
-            for i in range(n):
-                a, b = ep_p01["ticks"][i], ep_p02["ticks"][i]
-                for k in ("agent_energy_post", "pred_energy_post"):
-                    max_err = max(max_err, abs(a[k] - b[k]))
-                da = (a["agent_xy"][0] - (a["agent_xy"][0]), a["agent_xy"][1])  # normalized: already origin-relative
-                if a["mode"] != b["mode"]:
-                    mismatches.append((i, "mode", a["mode"], b["mode"]))
-            results.append({"fixture": [d, ae, pe], "arm_p01": arm, "arm_p02": p02_arm, "common_ticks": n,
-                            "max_abs_err_energy": max_err, "mismatches": mismatches,
-                            "outcome_p01": ep_p01["outcome"], "outcome_p02": ep_p02["outcome"]})
+        for arm_p01, p02_arm in (("F10", "S10_D0"), ("F15", "S15_D0"), ("F20", "S20_D0")):
+            ep_p01, env_p01 = _capture_env(p01, p01.run_episode, d, ae, pe, arm_p01, REP_SEED, "full")
+            ep_p02, env_p02 = _capture_env(self_mod, run_episode, d, ae, pe, p02_arm, REP_SEED, "full",
+                                            living_steps=100, post_death_steps=0)
+            cmp_live = _compare_ticks(ep_p01["ticks"], ep_p02["ticks"])
+            rng_p01 = repr(env_p01.rng.getstate()) if env_p01 else None
+            rng_p02 = repr(env_p02.rng.getstate()) if env_p02 else None
+            events_equal = (ep_p01["outcome"] == ep_p02["outcome"] and ep_p01["event_step"] == ep_p02["event_step"]
+                             and len(ep_p01["ticks"]) == len(ep_p02["ticks"]))
+            fail = (cmp_live["n_mismatches"] > 0 or any(v > 1e-8 for v in cmp_live["max_abs_err"].values())
+                    or not events_equal or rng_p01 != rng_p02)
+            entry = {"fixture": [d, ae, pe], "arm_p01": arm_p01, "arm_p02": p02_arm,
+                     "outcome_p01": ep_p01["outcome"], "outcome_p02": ep_p02["outcome"],
+                     "event_step_p01": ep_p01["event_step"], "event_step_p02": ep_p02["event_step"],
+                     "events_equal": events_equal, "rng_state_equal": rng_p01 == rng_p02,
+                     "live_comparison": cmp_live, "status": "fail" if fail else "pass"}
+            hist = _load_historical_trace(d, ae, pe, arm_p01)
+            if hist is not None:
+                cmp_hist_p01 = _compare_ticks(hist["ticks"], ep_p01["ticks"])
+                cmp_hist_p02 = _compare_ticks(hist["ticks"], ep_p02["ticks"])
+                entry["historical_vs_fresh_p01"] = cmp_hist_p01
+                entry["historical_vs_p02"] = cmp_hist_p02
+                if cmp_hist_p01["n_mismatches"] > 0 or any(v > 1e-8 for v in cmp_hist_p01["max_abs_err"].values()):
+                    entry["status"] = "fail"
+            else:
+                entry["historical_trace"] = f"not found at {P01_MAIN_TRACES} (read-only main checkout)"
+            results.append(entry)
+            if entry["status"] == "fail":
+                print(f"COMPAT FAIL at fixture={(d, ae, pe)} arm={arm_p01}/{p02_arm}; stopping remaining compat matrix, preserving evidence.", flush=True)
+                break
+        else:
+            continue
+        break
     json.dump(results, open(OUT / "compat.json", "w"), indent=1, default=_jsonable)
-    print(f"compat episodes={len(results) * 2}")
+    n_fail = sum(1 for r in results if r["status"] == "fail")
+    print(f"compat pairs_run={len(results)} (of 6 planned) failures={n_fail}")
 
 
 def cmd_main(args):
