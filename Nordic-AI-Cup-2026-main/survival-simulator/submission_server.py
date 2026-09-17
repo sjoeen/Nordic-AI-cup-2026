@@ -48,6 +48,7 @@ stats = {
     "fallback_agents": 0,
     "failed_requests": 0,
     "key_seen_in_header": None,
+    "client_ips": [],
     "last_sim_time": None,
     "last_score": None,
     "total_handler_ms": 0.0,
@@ -81,6 +82,10 @@ def check_api_key(request: Request) -> None:
 @app.post("/predict")
 def predict(request: Request, payload: dict = Body(...)):
     t0 = time.perf_counter()
+    client_ip = request.client.host if request.client else None
+    if client_ip not in stats["client_ips"]:  # reveals where the evaluator connects from
+        stats["client_ips"].append(client_ip)
+        log.info("new client %s", client_ip)
     check_api_key(request)
     stats["requests"] += 1
     actions = []
