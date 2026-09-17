@@ -1,0 +1,13 @@
+{
+  "name": "heuristic_v0",
+  "agent": "heuristic",
+  "provisional": "Parameters chosen by the executor for a first look at the game; NOT approved by Astra/human. Needs sign-off before it is treated as a baseline.",
+  "params": {
+    "spawn_energy_threshold": 175.0,
+    "wander_speed_frac": 0.5,
+    "scan_turn": 0.19634954084936207,
+    "tree_wait_dist": 40.0,
+    "flee_sprint_dist": 90.0,
+    "face_predator": true
+  }
+}

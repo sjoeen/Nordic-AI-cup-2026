@@ -3,3 +3,6 @@
 __pycache__/
 *.pyc
 training/checkpoints/
+logs/
+.pytest_cache/
+.ipynb_checkpoints/
