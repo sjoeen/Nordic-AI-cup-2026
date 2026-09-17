@@ -1,0 +1,136 @@
+{
+ "experiment": "C1-MECH-P01",
+ "type": "RUN (mechanism study, synthetic fixture; not a competition score)",
+ "fixture_matrix": {
+  "initial_separation_d": [
+   80,
+   120
+  ],
+  "initial_agent_energy": [
+   150,
+   300
+  ],
+  "initial_predator_energy": [
+   101,
+   200
+  ],
+  "seeds": [
+   0,
+   1,
+   2
+  ],
+  "arms": {
+   "S0": "move 0, turn to observed predator angle (0 if unseen)",
+   "A10": "move 10 along initial escape line (-x), turn to escape heading",
+   "F10": "move 10 along escape line, turn to observed predator angle",
+   "A15": "as A10 at 15",
+   "F15": "as F10 at 15",
+   "A20": "as A10 at 20",
+   "F20": "as F10 at 20"
+  },
+  "main_episodes": 168,
+  "repeat_fresh_process": {
+   "fixture": [
+    120,
+    300,
+    101
+   ],
+   "seed": 0,
+   "episodes": 7
+  },
+  "instrumentation_disabled": {
+   "fixture": [
+    120,
+    300,
+    101
+   ],
+   "seed": 0,
+   "episodes": 7
+  }
+ },
+ "fixture_state": {
+  "agent": {
+   "reporting_xy": [
+    0,
+    0
+   ],
+   "internal_xy": [
+    3000,
+    3000
+   ],
+   "heading": 0.0,
+   "age": 0,
+   "speed": 10,
+   "sprint_speed": 20,
+   "max_energy": 500,
+   "max_age": 120,
+   "size": 5,
+   "hearing": 50,
+   "vision": 200,
+   "cone": "pi/3"
+  },
+  "predator": {
+   "reporting_xy": [
+    "d",
+    0
+   ],
+   "heading": "pi",
+   "resting": false,
+   "speed": 11,
+   "sprint_speed": 15,
+   "max_energy": 200,
+   "size": 10,
+   "hearing": 60,
+   "vision": 250,
+   "cone": "pi/3"
+  },
+  "world": {
+   "width": 6000,
+   "height": 6000,
+   "boundary_thickness": 30,
+   "biome": "Grassland (move_penalty 1.0, energy_drain_rate 1.0) everywhere",
+   "chunk_size": 3000,
+   "obstacles": "4 boundary walls only",
+   "fruits": 0,
+   "trees": 0
+  },
+  "horizon": {
+   "dt": 0.1,
+   "max_steps": 100
+  }
+ },
+ "source_confirmed_constants": {
+  "dt": "0.1 (src/core.py:36 default; training/episode.py uses SimulationCore default)",
+  "chase_radius": "distance < hearing_radius*1.5 = 90 (predator.py:37)",
+  "chase_if_facing_away": "abs(rel_dir) > pi/2 (predator.py:37)",
+  "kill": "distance < predator.size + agent.size = 15, after predator move+turn (environment.py:710-724)",
+  "predator_walk_sprint": "11/15 (predator.py:10)",
+  "agent_walk_sprint": "10/20 (agent.py)",
+  "agent_max_energy": 500,
+  "sprint_clamp": "energy < max_energy/5 checked before move cost (environment.py:512)",
+  "move_cost": "0.05/unit up to speed, +0.5/unit above (environment.py:501-518)",
+  "turn_cost": "min(pi,|turn|)/(2pi) (environment.py:564)",
+  "predator_wake": "resting and energy > 100 -> wakes and acts same tick (environment.py:676-679)",
+  "predator_recharge": "+3 per tick while resting (environment.py:680)",
+  "predator_sleep": "energy <= 0 after kill check (environment.py:726-728)",
+  "predator_energy_cap": 200,
+  "circle_pivot": "pivot_sign = -np.sign(rel_dir); rel_dir == 0.0 gives pivot 0, i.e. move straight at the agent at sprint speed (predator.py:48-50)"
+ },
+ "fixture_deviations_from_full_game": [
+  "Environment built via __new__: no random biome map/pygame surfaces; uniform Grassland lookup",
+  "chunk_size 3000 instead of 400 (sensing.py:24-27 raises IndexError on an empty edge list; enlarged chunks keep far boundary edges in the candidate list; perception still radius/cone filtered)",
+  "instance no-ops: spawn_tree, spawn_fruit, spawn_fruit_around_tree, spawn_predator (rng gates in non_agent_step still consume RNG)",
+  "initial observation computed with the non_agent_step observe call without advancing time/age/drain",
+  "agent/predator constructed directly; headings/energies/resting set after construction (constructors consume one rng.uniform each for direction)",
+  "one agent, one predator, no food, no terrain, no births"
+ ],
+ "caps": {
+  "wall_clock_total_min": 60,
+  "sim_wall_clock_min": 5,
+  "max_full_episodes": 182,
+  "max_smoke_cases": 12,
+  "smoke_max_steps": 5,
+  "workers": 1,
+  "gpu": 0
+ }
+}

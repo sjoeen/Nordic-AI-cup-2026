@@ -1,0 +1,18 @@
+{
+ "predicate_check": {
+  "match": 6277,
+  "mismatch": 0
+ },
+ "circle_ticks_by_armfamily_pivotsign_reldir_exact0": {
+  "('F', -0.0, True)": 1872,
+  "('F', -1.0, False)": 20,
+  "('F', 1.0, False)": 8,
+  "('S', -0.0, True)": 36
+ },
+ "decision_reasons": {
+  "('chase', 'dist<90')": 1281,
+  "('chase', '|facing_away')": 1911,
+  "('chase', 'dist<90|facing_away')": 1149,
+  "('circle', '-')": 1936
+ }
+}
