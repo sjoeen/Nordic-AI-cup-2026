@@ -1,0 +1,45 @@
+{
+  "_comment": "Development default for the CPU-only dev machine. Every field can be overridden by env vars: MA_ASR_*, MA_QA_*, MA_EVIDENCE_*, MA_PIPELINE_*.",
+  "request_budget_s": 52.0,
+  "finalize_reserve_s": 1.5,
+  "fallback_answer": true,
+  "strict_checks": false,
+  "warm_up_on_init": true,
+  "asr_cache_dir": null,
+  "resegment": {
+    "max_unit_s": 8.0,
+    "pause_gap_s": 0.7,
+    "split_on_punct": true
+  },
+  "asr": {
+    "model_size": "small",
+    "device": "auto",
+    "compute_type": "auto",
+    "beam_size": 1,
+    "cpu_threads": 4,
+    "vad_filter": false,
+    "stop_reserve_s": 12.0
+  },
+  "qa": {
+    "backend": "retrieval_nli",
+    "embed_model": "BAAI/bge-small-en-v1.5",
+    "nli_model": "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
+    "top_k": 6,
+    "max_window_units": 3,
+    "yes_threshold": 0.5,
+    "off_topic_sim_threshold": 0.25,
+    "lexical_weight": 0.4,
+    "use_factcheck": true,
+    "device": "cpu",
+    "batch_size": 32,
+    "calibration_path": "configs/calibration_v1.json"
+  },
+  "evidence": {
+    "mode": "best_run",
+    "max_span_s": 15.0,
+    "pad_pre_s": 0.0,
+    "pad_post_s": 0.0,
+    "trim_filler": true,
+    "min_span_s": 0.2
+  }
+}

@@ -80,3 +80,9 @@ cython_debug/
 .vscode
 .devcontainer
 .jupyter
+
+# Project-local caches, environments and downloaded assets
+work/
+.venv/
+results/runs/
+*.mp3.b64

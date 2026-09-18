@@ -1,0 +1,19 @@
+# ML stack for the medical-appointment pipeline. Installed on top of
+# requirements.txt. Loose pins; the exact resolved versions used for a run are
+# recorded in manifests/ by eval_tools/freeze_env.py.
+#
+# CPU-only by default. On a CUDA host install torch from the matching CUDA
+# index instead of the cpu index used in setup_env.sh.
+
+faster-whisper>=1.2,<2        # timed ASR; bundles PyAV so no system ffmpeg needed
+ctranslate2>=4.5,<5
+huggingface_hub>=0.25
+
+torch>=2.4                    # CPU wheel via --extra-index-url in setup_env.sh
+transformers>=4.45,<5
+sentence-transformers>=3.0    # bi-encoder retrieval and NLI cross-encoders
+numpy>=1.26
+
+pytest>=8
+pytest-timeout>=2.3
+httpx>=0.27                   # FastAPI TestClient in tests/test_pipeline.py

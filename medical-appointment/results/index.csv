@@ -1,0 +1,10 @@
+run_id,timestamp,split,qa_backend,asr_config_hash,accuracy,mean_tiou,score,notes
+r001_nli_small_dev,2026-09-17T21:57:15+00:00,dev,retrieval_nli,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.7258,0.2282,0.4273,first offline run after module build
+r002_lexical_small_dev,2026-09-17T21:57:19+00:00,dev,lexical,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.6839,0.2486,0.4227,lexical fallback baseline
+r003_nli_mfa_rules_small_dev,2026-09-18T02:56:26+00:00,dev,retrieval_nli,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.8097,0.2588,0.4792,"MoritzLaurer mnli-fever-anli NLI, rewriter wired, rule decision, whisper small"
+r003_nli_mfa_rules_base_dev,2026-09-18T02:59:52+00:00,dev,retrieval_nli,c9093c22e735452ef36ef2e6db8a239e1fd605e27240d4e98426c9771f314b15,0.8129,0.2415,0.4701,"MoritzLaurer mnli-fever-anli NLI, rewriter wired, rule decision, whisper base"
+r004_nli_mfa_calibrated_small_dev,2026-09-18T03:04:37+00:00,dev,retrieval_nli,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.9194,0.4645,0.6464,calibration_v1 fitted on r003 small dev records (in-sample for dev; CV acc 0.923 / window tIoU 0.50)
+e2e_dev_001,2026-09-18T03:20:33+00:00,dev,replay,,0.9355,0.5012,0.6749,"replay http://localhost:9054/predict C1 end-to-end HTTP, small whisper, calibrated NLI, dev machine CPU"
+r005_after_reviews_small_dev,2026-09-18T03:25:22+00:00,dev,retrieval_nli,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.9194,0.4645,0.6464,same as r004 after evidence/factcheck/response_checks reviews
+e2e_holdout_001,2026-09-18T03:30:04+00:00,holdout,replay,,0.9250,0.5486,0.6992,"replay http://localhost:9054/predict frozen C1, one-time holdout, dev CPU"
+r006_no_trim_filler_small_dev,2026-09-18T04:23:14+00:00,dev,retrieval_nli,a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e,0.9194,0.4685,0.6488,r005 with trim_filler off

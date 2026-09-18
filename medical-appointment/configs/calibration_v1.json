@@ -1,0 +1,67 @@
+{
+ "decision": {
+  "feature_names": [
+   "p_ent_max",
+   "log_p_ent_max",
+   "p_ent_second",
+   "p_con_max",
+   "cosine_max",
+   "lexical_max",
+   "existence",
+   "verdict_contradiction",
+   "verdict_unverifiable",
+   "verdict_consistent",
+   "verdict_no_quantities",
+   "question_len"
+  ],
+  "intercept": 2.8282545173659845,
+  "kind": "logistic",
+  "weights": [
+   -0.7318349653021432,
+   0.7174446183674168,
+   0.5783041753903375,
+   -2.435930593497937,
+   0.9699503357234623,
+   1.8327996828933875,
+   -1.7833433348354228,
+   -0.739372937115162,
+   0.5271204537203881,
+   -0.018822235348748155,
+   0.2264213519634382,
+   -0.7007784568139513
+  ]
+ },
+ "decision_threshold": 0.5,
+ "provenance": {
+  "n_records": 310,
+  "records": "results/runs/r003_nli_mfa_rules_small_dev/records.jsonl",
+  "transcripts": "work/transcripts/a0fafd700b24a45f411eb1940777f0a86a158b417480fe79655ab8042466ea6e"
+ },
+ "version": 1,
+ "window": {
+  "feature_names": [
+   "p_ent",
+   "p_ent_rel",
+   "p_con",
+   "cosine",
+   "cosine_rel",
+   "lexical",
+   "n_units",
+   "duration",
+   "rank"
+  ],
+  "intercept": 0.34516489793614485,
+  "kind": "linear",
+  "weights": [
+   0.057338884845613364,
+   0.07962183354270679,
+   -0.13093568089121174,
+   0.2130779869934372,
+   -0.008023999365183082,
+   0.0367460464592757,
+   -0.07740656358424337,
+   -0.0851667613161272,
+   -0.054578413414741206
+  ]
+ }
+}

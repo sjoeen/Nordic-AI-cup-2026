@@ -1,0 +1,255 @@
+{
+ "version": 1,
+ "seed": 2026,
+ "created": "2026-09-17T21:54:09+00:00",
+ "n_holdout_requested": 8,
+ "force_dev": [
+  "sample_20"
+ ],
+ "jaccard_threshold": 0.5,
+ "groups": [
+  [
+   "sample_4"
+  ],
+  [
+   "sample_5"
+  ],
+  [
+   "sample_6"
+  ],
+  [
+   "sample_10"
+  ],
+  [
+   "sample_17"
+  ],
+  [
+   "sample_18"
+  ],
+  [
+   "sample_19"
+  ],
+  [
+   "sample_20"
+  ],
+  [
+   "sample_23"
+  ],
+  [
+   "sample_33"
+  ],
+  [
+   "sample_37"
+  ],
+  [
+   "sample_39"
+  ],
+  [
+   "sample_42"
+  ],
+  [
+   "sample_43"
+  ],
+  [
+   "sample_47"
+  ],
+  [
+   "sample_48"
+  ],
+  [
+   "sample_50"
+  ],
+  [
+   "sample_52"
+  ],
+  [
+   "sample_54"
+  ],
+  [
+   "sample_55"
+  ],
+  [
+   "sample_56"
+  ],
+  [
+   "sample_57"
+  ],
+  [
+   "sample_63"
+  ],
+  [
+   "sample_64"
+  ],
+  [
+   "sample_66"
+  ],
+  [
+   "sample_67"
+  ],
+  [
+   "sample_69"
+  ],
+  [
+   "sample_70"
+  ],
+  [
+   "sample_71"
+  ],
+  [
+   "sample_75"
+  ],
+  [
+   "sample_77"
+  ],
+  [
+   "sample_79"
+  ],
+  [
+   "sample_81"
+  ],
+  [
+   "sample_82"
+  ],
+  [
+   "sample_84"
+  ],
+  [
+   "sample_86"
+  ],
+  [
+   "sample_90"
+  ],
+  [
+   "sample_92"
+  ],
+  [
+   "sample_95"
+  ]
+ ],
+ "transcripts": [
+  "sample_4",
+  "sample_5",
+  "sample_6",
+  "sample_10",
+  "sample_17",
+  "sample_18",
+  "sample_19",
+  "sample_20",
+  "sample_23",
+  "sample_33",
+  "sample_37",
+  "sample_39",
+  "sample_42",
+  "sample_43",
+  "sample_47",
+  "sample_48",
+  "sample_50",
+  "sample_52",
+  "sample_54",
+  "sample_55",
+  "sample_56",
+  "sample_57",
+  "sample_63",
+  "sample_64",
+  "sample_66",
+  "sample_67",
+  "sample_69",
+  "sample_70",
+  "sample_71",
+  "sample_75",
+  "sample_77",
+  "sample_79",
+  "sample_81",
+  "sample_82",
+  "sample_84",
+  "sample_86",
+  "sample_90",
+  "sample_92",
+  "sample_95"
+ ],
+ "dev": [
+  "sample_4",
+  "sample_6",
+  "sample_10",
+  "sample_18",
+  "sample_19",
+  "sample_20",
+  "sample_23",
+  "sample_37",
+  "sample_39",
+  "sample_43",
+  "sample_48",
+  "sample_50",
+  "sample_54",
+  "sample_55",
+  "sample_56",
+  "sample_57",
+  "sample_63",
+  "sample_66",
+  "sample_67",
+  "sample_69",
+  "sample_70",
+  "sample_71",
+  "sample_75",
+  "sample_77",
+  "sample_79",
+  "sample_81",
+  "sample_82",
+  "sample_86",
+  "sample_90",
+  "sample_92",
+  "sample_95"
+ ],
+ "holdout": [
+  "sample_5",
+  "sample_17",
+  "sample_33",
+  "sample_42",
+  "sample_47",
+  "sample_52",
+  "sample_64",
+  "sample_84"
+ ],
+ "source_csv_sha256": "652fd4614c36d56a3055142aed9d8f5e6c1459518e65c01fd4a563e615242e76",
+ "audio_sha256": {
+  "sample_4": "31de8524c66fd6634783e9c12453fe3528506ba2d9882ca4e124e55a6862f93c",
+  "sample_5": "dd4b503c843b9a8d32ee57333a40c1846edd832793e071cd30f1f8c7f2e461bb",
+  "sample_6": "503ec29568f57d1f149b02c0dddba66753dae5459a9c58d7e7474a447078cbcf",
+  "sample_10": "f626a83e7b7c25672030cfbca51f17914f7d137a853c03b850908bef2c78b78f",
+  "sample_17": "3aa223eb410c8968fbfac7052d26f130a4375778eec3dc69eddbcfd438cc3147",
+  "sample_18": "f028e9b07ffb2fb3a9b2cdb28d8184cca21ad1571ccfb64a684528561be034e3",
+  "sample_19": "602056cb8333eb50b157e594a2bac0dc7d4715fea2e3ee45438f80579d2067c0",
+  "sample_20": "16135325736a0eaa81997402ad557c569dd77a56883d554fd63925ef1bba33de",
+  "sample_23": "eb1b26a162519321b90bc6fd03e7023c40e1559b037e29698ae8c7fb28d9875f",
+  "sample_33": "0a06284770b634c574d2d8f49e95c17717ad6a4052ad3b642ba467f13f1a6224",
+  "sample_37": "4ea2798ecffbc7d7dff4d8bc8472b68f0f1a8133669a6e5a475a56441532781e",
+  "sample_39": "c9c347f5ec043ec12fa055ccb126e7548c98e861f060a9f526f4b31e3d6e9d03",
+  "sample_42": "11e45086a799698c5a6f849f3fbb160f569267fe1046617e8a995bdcfbfa1ceb",
+  "sample_43": "07cf3c3bca8af301b8b2165853b12063c2e1cd2de3f04996f2bf7529dd652648",
+  "sample_47": "c1a435f75d51c4280565b1f3b8a40b8a3b94cb1c8841b1190ad2c23925067df3",
+  "sample_48": "a73d5303fe290b6b4b61e01e433356df494524631f462b76ba05dfc296eff071",
+  "sample_50": "2da14f383e31a7598fbc7609292216e0d74ec915f5ec333a9ea2f7d47c6529c3",
+  "sample_52": "44f3c533512716a27c3b3e95162e47d7a7baba87f18064988d0ed2bac81aa630",
+  "sample_54": "4a133f3213fb8225551a0cb8247105272ca995e9addfcccf8296f317be273d24",
+  "sample_55": "cea2b325a02684df99414267db3e940a684fd747bda8ffbb24f27aec30e925d9",
+  "sample_56": "bbf24267a7d4976f7485e29e064159db8943c058d2c186a0b041b2992658ba8d",
+  "sample_57": "80b854be732b5807787cb07aa897854290465e9282415ceff8e7dd6eaed18cb4",
+  "sample_63": "0f0b7d7837cb6c110f2209756b9cc7e8bc310eb7b63bb70940d1ca1687d0e83f",
+  "sample_64": "b3eb97e265c73fa083f10a4f1695648c899b38f82cf64ace9e46135c2c851ceb",
+  "sample_66": "b976d43d24fc89d6924c84b0d1cbbf8dc9f5acaf0683877a66833bb0f3fc7364",
+  "sample_67": "60ad7d411fb8139894784967006a84bfc778df92aca19ee86539e6d53a785b13",
+  "sample_69": "f161a3de336186cb623650b9a7fac63e7f1bc81d48d23aad68098c712ea39d78",
+  "sample_70": "b92198a079fa430ef24d7828aacad9c80aa7fdb0b7ae0404609b09bb1afe1712",
+  "sample_71": "b6f324c69cda287bd30e578c0978c9d908e7dc8684b65451b3896f1004f5ef01",
+  "sample_75": "ecb01beff81e8d7b5dbffba5c9d886888beb3addf82c09a250133584fc382bd9",
+  "sample_77": "1987e3035e8ed3d7b8b0ee030562133dcddda00d75a16d1f7464a4f2798fbf99",
+  "sample_79": "69d2947952046cd5b86cc14952e136ad160a04cfe2cdeeb6c8d68ad0a92b2992",
+  "sample_81": "17ad69f4ea286f4534098bcd3ef7093f036f5481b7ec9c0949aafae1400b7f17",
+  "sample_82": "84549ce264a5f923444e25fb1452baab663a8e9a079625d6b528a429600153d6",
+  "sample_84": "b311d1f97b76bb9fd81755f3d46528d60166e81071fa1f46e9758086ee7fc39d",
+  "sample_86": "2fef3880fe58e92e5c2d0c7a3ad283dbd5c80807e49889a664266afd8f8ed7fd",
+  "sample_90": "24bf9547ac10ea4a917cd943eea734f4919e1da34a8c69d57049fd6590dc09e1",
+  "sample_92": "df299c9ba8b7e233faaec8780213dd7b00e9f07503fe60d7ffb423ed1cd84c1a",
+  "sample_95": "b48c6824a0fa04a6c8727f1fce10724c9a6d5bc6f3c21232b78cb1670f78ba19"
+ }
+}
