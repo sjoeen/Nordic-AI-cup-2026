@@ -1,0 +1,13 @@
+agent,seed,score,extinction_time,end_reason,wall_clock_sec
+decoy,1,1086.5943,1107.5,extinction,287.23
+decoy,2,1695.6335,1691.1,extinction,382.42
+decoy,3,1700.4594,1661.9,extinction,381.38
+dispersal,1,1647.1724,1614.2,extinction,385.16
+dispersal,2,1233.9275,1302.8,extinction,328.61
+dispersal,3,1493.8118,1503.8,extinction,375.51
+refuge,1,1655.0775,1624.3,extinction,438.29
+refuge,2,1295.9935,1292.5,extinction,311.57
+refuge,3,1807.3065,1803.3,extinction,457.62
+v1,1,1098.1027,1049.9,extinction,312.59
+v1,2,1004.645,961.0,extinction,251.57
+v1,3,1074.6105,1026.2,extinction,362.17
