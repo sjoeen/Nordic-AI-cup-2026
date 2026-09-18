@@ -6,6 +6,7 @@
   "strict_checks": true,
   "warm_up_on_init": false,
   "asr_cache_dir": null,
+  "trace_log_path": null,
   "resegment": {"max_unit_s": 8.0, "pause_gap_s": 0.7, "split_on_punct": true},
   "asr": {"model_size": "tiny", "device": "cpu", "compute_type": "int8", "beam_size": 1, "cpu_threads": 1, "vad_filter": false, "stop_reserve_s": 1.0},
   "qa": {"backend": "lexical", "use_factcheck": true, "device": "cpu"},

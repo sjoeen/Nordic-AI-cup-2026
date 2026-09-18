@@ -16,7 +16,7 @@ import uvicorn
 from fastapi import FastAPI
 
 from dtos import ASRQuestionRequestDto, ASRQuestionResponseDto
-from example import predict
+from example import pipeline_status, predict
 from utils import validate_response
 
 HOST = '0.0.0.0'
@@ -39,6 +39,19 @@ def predict_endpoint(request: ASRQuestionRequestDto):
     validate_response(response, expected_count=len(request.questions))
 
     return response
+
+
+@app.get('/health')
+def health():
+    """Is this process actually serving the model, or the fallback?
+
+    A degraded process still returns a valid body for every request, so an
+    outage here looks exactly like a confident wrong answer from the outside.
+    Check ``degraded`` before an attempt: the evaluation run cannot be retried.
+    """
+    status = pipeline_status()
+    status['uptime'] = '{}'.format(datetime.timedelta(seconds=time.time() - start_time))
+    return status
 
 
 @app.get('/api')

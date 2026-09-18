@@ -86,3 +86,6 @@ work/
 .venv/
 results/runs/
 *.mp3.b64
+
+# Request traces written by MA_PIPELINE_TRACE_LOG_PATH
+traces/

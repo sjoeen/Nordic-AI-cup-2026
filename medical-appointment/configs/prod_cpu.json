@@ -6,6 +6,7 @@
   "strict_checks": false,
   "warm_up_on_init": true,
   "asr_cache_dir": null,
+  "trace_log_path": null,
   "resegment": {
     "max_unit_s": 8.0,
     "pause_gap_s": 0.7,

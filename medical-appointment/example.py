@@ -22,13 +22,52 @@ logger = logging.getLogger(__name__)
 # alive in partial failures (a ``False`` can never carry a span).
 FALLBACK_ANSWER = True
 
+# Why the pipeline is not there, when it is not. A degraded process still
+# answers every request with a valid body, so nothing downstream notices: the
+# service scores it as ten confident wrong answers rather than an outage. This
+# string is what ``/health`` reports, and it is the difference between finding
+# that out in a second and finding it out from the score.
+INIT_ERROR = None
+
 try:
     from pipeline import get_pipeline
 
     PIPELINE = get_pipeline()
-except Exception:  # pragma: no cover - only hit when models cannot load
+except Exception as exc:  # pragma: no cover - only hit when models cannot load
     logger.exception('pipeline failed to initialise; serving emergency responses')
+    INIT_ERROR = f'{type(exc).__name__}: {exc}'
     PIPELINE = None
+
+
+def pipeline_status() -> dict:
+    """What ``/health`` reports: is the real pipeline serving, or the fallback?
+
+    ``degraded`` is the field to alert on. When it is true every answer is the
+    constant ``FALLBACK_ANSWER`` with no evidence span, which scores about half
+    the accuracy marks and none of the evidence ones.
+    """
+    pipeline = PIPELINE
+    if pipeline is None:
+        return {'pipeline_live': False, 'degraded': True, 'init_error': INIT_ERROR}
+
+    # Constructing the pipeline proves nothing: every stage imports its heavy
+    # dependency lazily, so a host with no ML stack builds a complete object
+    # that answers every question with the constant fallback. Health is whether
+    # warm-up actually loaded the models.
+    failures = dict(getattr(pipeline, 'warm_up_failures', {}) or {})
+    return {
+        'pipeline_live': True,
+        'degraded': not getattr(pipeline, 'healthy', False),
+        'init_error': INIT_ERROR,
+        'warm_up_failures': failures,
+        'warmed_up': getattr(pipeline, 'warmed_up', False),
+        'config_source': getattr(pipeline.config, 'source_path', ''),
+        'requests_served': getattr(pipeline, 'requests_served', 0),
+        'asr_model_size': (pipeline.config.asr or {}).get('model_size'),
+        'qa_backend': (pipeline.config.qa or {}).get('backend'),
+        'trace_log_path': getattr(pipeline.config, 'trace_log_path', None),
+        'warm_up_asr_info': (getattr(pipeline, 'warm_up_trace', {}) or {}).get('asr_info', {}),
+    }
 
 
 ### CALL YOUR CUSTOM MODEL VIA THIS FUNCTION ###

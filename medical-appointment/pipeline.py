@@ -22,6 +22,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field, fields
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -82,6 +83,7 @@ class PipelineConfig:
     strict_checks: bool = False
     warm_up_on_init: bool = True
     asr_cache_dir: Optional[str] = None
+    trace_log_path: Optional[str] = None
     resegment: Dict[str, Any] = field(default_factory=dict)
     asr: Dict[str, Any] = field(default_factory=dict)
     qa: Dict[str, Any] = field(default_factory=dict)
@@ -172,6 +174,13 @@ class Pipeline:
         self.evidence_policy = evidence_policy if evidence_policy is not None else self._build_evidence_policy()
         self.requests_served = 0
         self.warmed_up = False
+        # What warm-up actually managed to do. Every stage imports its heavy
+        # dependency lazily, so a process with no ML stack installed still
+        # CONSTRUCTS cleanly and then answers every question with the constant
+        # fallback. Construction succeeding proves nothing; these two fields are
+        # the evidence that the models are really there.
+        self.warm_up_failures: Dict[str, str] = {}
+        self.warm_up_trace: Dict[str, Any] = {}
         if self.config.warm_up_on_init:
             self.warm_up()
 
@@ -215,11 +224,14 @@ class Pipeline:
         """Load every model and push one synthetic request through the whole
         path so the first real request pays no lazy cost."""
         started = time.monotonic()
+        self.warm_up_failures = {}
+        self.warm_up_trace = {}
         for name, stage in (('asr', self.asr), ('qa', self.qa), ('fallback_qa', self.fallback_qa)):
             try:
                 stage.warm_up()
-            except Exception:
+            except Exception as exc:
                 logger.exception('warm-up of %s failed; continuing', name)
+                self.warm_up_failures[name] = f'{type(exc).__name__}: {exc}'
         try:
             import base64
             import io
@@ -235,11 +247,38 @@ class Pipeline:
                 w.setframerate(16000)
                 w.writeframes((samples * 32767).astype(np.int16).tobytes())
             payload = base64.b64encode(buf.getvalue()).decode('ascii')
-            self.predict_with_trace(payload, ['Is this a warm-up question?'], audio_filename='warmup.wav')
-        except Exception:
+            _, warm_trace = self.predict_with_trace(
+                payload, ['Is this a warm-up question?'], audio_filename='warmup.wav',
+            )
+            self.warm_up_trace = warm_trace.summary()
+            # A pure tone transcribes to nothing, so 'no_transcript' is the
+            # healthy outcome here. An *error*, or the emergency response, means
+            # a stage is genuinely missing.
+            if warm_trace.errors:
+                self.warm_up_failures['synthetic_request'] = '; '.join(warm_trace.errors)
+            elif 'emergency_response' in warm_trace.fallbacks:
+                self.warm_up_failures['synthetic_request'] = 'fell through to the emergency response'
+        except Exception as exc:
             logger.exception('synthetic warm-up request failed; continuing')
+            self.warm_up_failures['synthetic_request'] = f'{type(exc).__name__}: {exc}'
         self.warmed_up = True
+        if self.warm_up_failures:
+            logger.error(
+                'DEGRADED: warm-up failed for %s. Every answer will be the constant '
+                'fallback with no evidence span. Do not start an attempt against this process.',
+                ', '.join(sorted(self.warm_up_failures)),
+            )
         logger.info('pipeline warm-up finished in %.1f s', time.monotonic() - started)
+
+    @property
+    def healthy(self) -> bool:
+        """True only on positive evidence that the real models are serving.
+
+        Fails closed: a pipeline that never warmed up cannot be vouched for, so
+        it reports unhealthy rather than unknown. This is read before an
+        attempt that cannot be retried.
+        """
+        return self.warmed_up and not self.warm_up_failures
 
     # -- serving ---------------------------------------------------------- #
 
@@ -401,7 +440,36 @@ class Pipeline:
         ]
 
     def _log_trace(self, trace: RequestTrace) -> None:
-        logger.info('request %s: %s', trace.audio_filename, json.dumps(trace.summary(), default=str))
+        record = trace.summary()
+        logger.info('request %s: %s', trace.audio_filename, json.dumps(record, default=str))
+        self._persist_trace(record)
+
+    def _persist_trace(self, record: Dict[str, Any]) -> None:
+        """Append one request's trace to ``trace_log_path`` as a JSONL line.
+
+        Diagnostics only, and unable to fail a request: an unwritable path or a
+        full disk costs a log line, not ten questions. The record says what the
+        request *did* - timings, ASR info, fallbacks, errors, how many answers
+        were yes and how many carried a span - and holds neither the audio nor
+        the transcript text.
+        """
+        path = self.config.trace_log_path
+        if not path:
+            return
+        try:
+            record = dict(
+                record,
+                logged_at=datetime.now(timezone.utc).isoformat(),
+                request_index=self.requests_served,
+                config_source=self.config.source_path,
+            )
+            target = Path(path)
+            if target.parent != Path(''):
+                target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open('a', encoding='utf-8') as handle:
+                handle.write(json.dumps(record, default=str) + '\n')
+        except Exception:
+            logger.warning('could not persist trace to %s', path, exc_info=True)
 
 
 # --------------------------------------------------------------------------- #
