@@ -1,0 +1,30 @@
+{
+  "status": "decision_checks_only",
+  "tests_passed": 9,
+  "identical_baseline_actions": 1230,
+  "full_simulations_run": 0,
+  "historical_population_peaks": [
+    {
+      "seed": 1,
+      "survival_seconds": 1887.8,
+      "peak_agents": 14,
+      "source_sha256": "b7d0451c71616042ee3bbbd4061fc44bd319487e2dbe43179eb51ebc2ec3eb0f",
+      "limit": 3000.0
+    },
+    {
+      "seed": 2,
+      "survival_seconds": 1618.9,
+      "peak_agents": 13,
+      "source_sha256": "b7d0451c71616042ee3bbbd4061fc44bd319487e2dbe43179eb51ebc2ec3eb0f",
+      "limit": 3000.0
+    },
+    {
+      "seed": 3,
+      "survival_seconds": 1831.2,
+      "peak_agents": 14,
+      "source_sha256": "b7d0451c71616042ee3bbbd4061fc44bd319487e2dbe43179eb51ebc2ec3eb0f",
+      "limit": 3000.0
+    }
+  ],
+  "baseline_controller_sha256": "79069207333851ea391b4ed4e30e459bef980790f3c4390a6363d020ad83555f"
+}
