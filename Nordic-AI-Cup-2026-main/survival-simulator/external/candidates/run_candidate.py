@@ -24,10 +24,10 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 SIM_ROOT = Path(__file__).resolve().parents[2]  # .../survival-simulator
-CANDIDATE_DIR = Path(__file__).resolve().parent / "original-eat-rest-overcrowding-v4"
-for p in (str(SIM_ROOT), str(CANDIDATE_DIR)):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+CANDIDATES_ROOT = Path(__file__).resolve().parent
+DEFAULT_CANDIDATE = "original-eat-rest-overcrowding-v4"
+if str(SIM_ROOT) not in sys.path:
+    sys.path.insert(0, str(SIM_ROOT))
 
 MAX_SIM_TIME = 3000  # matches training/batch_runner.py
 
@@ -35,7 +35,10 @@ MAX_SIM_TIME = 3000  # matches training/batch_runner.py
 class CandidateAdapter:
     """decide_all(states, sim_time)-style wrapper around survival_agent.make_policy()."""
 
-    def __init__(self):
+    def __init__(self, candidate_dir):
+        candidate_dir = str(candidate_dir)
+        if candidate_dir not in sys.path:
+            sys.path.insert(0, candidate_dir)
         import survival_agent
         self.policy = survival_agent.make_policy()
 
@@ -44,11 +47,11 @@ class CandidateAdapter:
         return [a.model_dump() for a in actions]
 
 
-def run_one(seed):
+def run_one(seed, candidate, agent_label):
     from src.core import SimulationCore
     from src.utils.DTOs import ActionRequest
 
-    agent = CandidateAdapter()
+    agent = CandidateAdapter(CANDIDATES_ROOT / candidate)
     sim = SimulationCore(seed=seed, starting_predators=0)
     t0 = time.perf_counter()
     state = sim.step([])
@@ -58,7 +61,7 @@ def run_one(seed):
         parsed = [(a["agent_id"], ActionRequest(**a)) for a in actions]
         state = sim.step(parsed)
     row = dict(
-        agent="original_eat_rest_overcrowding_v4", seed=seed, score=round(float(state["score"]), 4),
+        agent=agent_label, seed=seed, score=round(float(state["score"]), 4),
         extinction_time=round(sim.env.time, 2),
         end_reason="extinction" if state["num_agents"] == 0 else "time_limit",
         wall_clock_sec=round(time.perf_counter() - t0, 2),
@@ -72,13 +75,17 @@ if __name__ == "__main__":
     p.add_argument("--seeds", type=int, nargs="+", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--workers", type=int, default=None)
+    p.add_argument("--candidate", default=DEFAULT_CANDIDATE,
+                    help="folder name under external/candidates/ containing survival_agent.py")
+    p.add_argument("--agent", default=None, help="agent label written to the CSV (default: --candidate, dashes -> underscores)")
     a = p.parse_args()
+    agent_label = a.agent or a.candidate.replace("-", "_")
 
     workers = a.workers or max(1, min(len(a.seeds), (os.cpu_count() or 2) - 1))
 
     rows = []
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(run_one, seed): seed for seed in a.seeds}
+        futures = {pool.submit(run_one, seed, a.candidate, agent_label): seed for seed in a.seeds}
         for fut in as_completed(futures):
             rows.append(fut.result())
 
@@ -91,6 +98,6 @@ if __name__ == "__main__":
         writer.writerows(rows)
 
     scores = [r["score"] for r in rows]
-    print(f"original_eat_rest_overcrowding_v4: mean={statistics.mean(scores):.4f} median={statistics.median(scores):.4f} "
+    print(f"{agent_label}: mean={statistics.mean(scores):.4f} median={statistics.median(scores):.4f} "
           f"n={len(scores)} scores={scores}")
     print(f"wrote {out_path}")
