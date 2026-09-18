@@ -1,0 +1,23 @@
+{
+  "name": "heuristic_v1",
+  "agent": "heuristic_v1",
+  "provisional": "heuristic_v0 plus tree-cap/LEAVING/birth rules per session spec; NOT approved by Astra/human.",
+  "params": {
+    "wander_speed_frac": 0.5,
+    "scan_turn": 0.19634954084936207,
+    "tree_wait_dist": 40.0,
+    "flee_sprint_dist": 90.0,
+    "face_predator": true,
+
+    "tree_radius": 60.0,
+    "tree_cap": 2,
+    "tree_join_threshold": 2,
+    "leaving_ignore_steps": 30,
+    "leaving_turn_angle": 2.0943951023931953,
+
+    "birth_energy_threshold": 230.0,
+    "birth_max_others_at_tree": 1,
+    "birth_no_tree_radius": 80.0,
+    "birth_max_others_no_tree": 1
+  }
+}

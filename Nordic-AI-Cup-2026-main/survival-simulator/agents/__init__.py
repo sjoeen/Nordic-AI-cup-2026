@@ -11,8 +11,9 @@ from pathlib import Path
 
 from agents.dummy import DummyAgent
 from agents.heuristic import HeuristicAgent
+from agents.heuristic_v1 import HeuristicAgentV1
 
-AGENTS = {"dummy": DummyAgent, "heuristic": HeuristicAgent}
+AGENTS = {"dummy": DummyAgent, "heuristic": HeuristicAgent, "heuristic_v1": HeuristicAgentV1}
 
 
 def load_config(path) -> dict:
