@@ -29,6 +29,10 @@ While ON, births the baseline orders (normal and emergency) are vetoed unless
   - at least one fruit is observed within eg_birth_food, so the newborn can eat (eg_birth_food, 0 = off)
 An agent of eg_legacy_age or older is exempt from the vetoes and is also ORDERED to breed once it can afford it: its
 energy is about to be lost to old age anyway, and a newborn restarts the 60-120 s lifespan clock (eg_legacy_age, 0 = off).
+  v2 (first cluster trial, 16 seeds, +49 SE 63): the ordered births fired ~14 times a game and newborn starvation per
+  birth ROSE (17% -> 25% in the 300..100 s window), because the newborn landed wherever the old agent happened to stand.
+  An ordered birth now needs a viable spot: a fruit within eg_legacy_food and no predator within eg_birth_safe
+  (eg_legacy_food=0 restores the v1 rule: any spot with no predator within 55).
 eg_overrides is a dict of baseline settings that apply only while the endgame is ON (restored when it turns OFF),
 e.g. {"escape_radius": 80, "search_speed": 0.3, "population": 4}.
 """
@@ -44,7 +48,7 @@ STRATEGY_NAME = "appetite+endgame"
 DEFAULTS = dict(eg_enabled=1, eg_trigger="colony", eg_min_clock=400., eg_window=20.,
                 eg_energy_on=175., eg_agents_on=3, eg_energy_off=205., eg_agents_off=5, eg_stable=30.,
                 eg_ratio=1.5, eg_release=1., eg_sensed_window=30., eg_sensed_on=.5, eg_sensed_off=.25,
-                eg_birth_reserve=50., eg_birth_safe=130., eg_birth_food=0., eg_legacy_age=95., eg_overrides={})
+                eg_birth_reserve=50., eg_birth_safe=130., eg_birth_food=0., eg_legacy_age=95., eg_legacy_food=120., eg_overrides={})
 CONFIG = dict(base.CONFIG, **DEFAULTS)
 
 
@@ -114,7 +118,9 @@ class EndgamePolicy(base.AppetitePolicy):
                     + abs(action.turn_angle) / 6.283)
             if c["eg_legacy_age"] and s["age"] >= c["eg_legacy_age"]:
                 enemies = [o["distance"] for o in seen if o["type"] == "Predator"]
-                if not action.spawn_agent and s["energy"] > 104. + cost and (not enemies or min(enemies) > 55.):
+                clear = c["eg_birth_safe"] if c["eg_legacy_food"] else 55.
+                fed = not c["eg_legacy_food"] or any(o["type"] == "Fruit" and o["distance"] < c["eg_legacy_food"] for o in seen)
+                if not action.spawn_agent and s["energy"] > 104. + cost and fed and (not enemies or min(enemies) > clear):
                     action.spawn_agent = True
                     self.metrics["eg_legacy_births"] += 1
                 continue
