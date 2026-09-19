@@ -19,6 +19,50 @@ import zipfile
 HERE = Path(__file__).resolve().parent
 PACKAGE = "cluster-rl-training"
 
+GIB = 2 ** 30
+GAME_GIB = 2.0  # package README's starting allocation per concurrent game
+
+
+def _read(path):
+    try:
+        return Path(path).read_text().split()
+    except OSError:
+        return None
+
+
+def detect_resources():
+    """CPUs and free RAM this container may really use. os.cpu_count() reports the host, not the
+    JupyterHub cgroup limit, and oversubscribing it gets workers throttled or OOM-killed."""
+    cpus = float(len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1)
+    quota = _read("/sys/fs/cgroup/cpu.max")  # cgroup v2: "<quota|max> <period>"
+    if quota and quota[0] != "max":
+        cpus = min(cpus, int(quota[0]) / int(quota[1]))
+    else:
+        v1q, v1p = _read("/sys/fs/cgroup/cpu/cpu.cfs_quota_us"), _read("/sys/fs/cgroup/cpu/cpu.cfs_period_us")
+        if v1q and v1p and int(v1q[0]) > 0:
+            cpus = min(cpus, int(v1q[0]) / int(v1p[0]))
+    free = None
+    meminfo = _read("/proc/meminfo")
+    if meminfo and "MemAvailable:" in meminfo:
+        free = int(meminfo[meminfo.index("MemAvailable:") + 1]) * 1024
+    for limit, used in (("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current"),
+                        ("/sys/fs/cgroup/memory/memory.limit_in_bytes", "/sys/fs/cgroup/memory/memory.usage_in_bytes")):
+        lim, use = _read(limit), _read(used)
+        if lim and use and lim[0] != "max" and int(lim[0]) < 2 ** 60:
+            room = int(lim[0]) - int(use[0])
+            free = room if free is None else min(free, room)
+    return cpus, free
+
+
+def auto_workers():
+    cpus, free = detect_resources()
+    by_cpu = max(1, int(cpus))
+    by_ram = by_cpu if free is None else max(1, int((free / GIB - 2) / GAME_GIB))  # keep 2 GiB headroom
+    workers = min(by_cpu, by_ram)
+    print(f"resources: {cpus:g} usable CPUs, {'unknown' if free is None else f'{free / GIB:.1f} GiB'} free RAM "
+          f"-> {workers} concurrent games (cpu limit {by_cpu}, ram limit {by_ram} at {GAME_GIB:g} GiB/game)", flush=True)
+    return workers
+
 
 def stream(cmd, cwd):
     """Run a command, echo its output live, return the captured stdout lines."""
@@ -45,11 +89,13 @@ def main():
     parser.add_argument("--validation-seeds", default="2000:2016")
     parser.add_argument("--test-seeds", default="3000:3032")
     parser.add_argument("--rounds", type=int, default=1, help="total rounds, including those already completed")
-    parser.add_argument("--workers", type=int, default=os.cpu_count() or 4)
+    parser.add_argument("--workers", type=int, default=0, help="concurrent games; 0 = size from the container's CPU and RAM limits")
     parser.add_argument("--skip-tests", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
     args = parser.parse_args()
 
+    if args.workers < 1:
+        args.workers = auto_workers()
     root = Path(args.workdir).resolve() / PACKAGE
     if not (root / "cluster.py").exists():
         print(f"extracting {args.zip} -> {root.parent}", flush=True)
