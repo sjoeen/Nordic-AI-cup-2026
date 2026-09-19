@@ -6,11 +6,15 @@ The package is extracted from cluster-rl-training.zip (never from a git checkout
 hash-checked sources keep their exact bytes. All work happens in --workdir, outside the repo.
 Rerunning the same command resumes: finished games, merges and evaluations are reused.
 Linux only (the package uses POSIX locks and process groups).
+
+--learner neural overlays neural-rl/ onto a separate copy of the package: same games, baseline
+and rewards, but the Q table is an MLP ensemble trained on the GPU after every round.
 """
 from pathlib import Path
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -83,8 +87,13 @@ def stream(cmd, cwd):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--zip", default=str(HERE / f"{PACKAGE}.zip"))
-    parser.add_argument("--workdir", default=str(Path.home()), help="package is extracted to <workdir>/cluster-rl-training")
+    parser.add_argument("--learner", choices=["tabular", "neural"], default="tabular")
+    parser.add_argument("--workdir", default=None, help="package is extracted to <workdir>/cluster-rl-training "
+                        "(default: ~ for tabular, ~/neural-rl for neural)")
     parser.add_argument("--run", default="runs/all-seeds", help="run directory, relative to the package")
+    parser.add_argument("--device", default="auto", choices=["auto", "cuda", "cpu"], help="neural trainer device")
+    parser.add_argument("--init-args", nargs=argparse.REMAINDER, default=[],
+                        help="extra `init` options, e.g. --init-args --hidden 32 --steps 20000 (must come last)")
     parser.add_argument("--train-seeds", default="1000:1256", help="package default: all 256 training seeds")
     parser.add_argument("--validation-seeds", default="2000:2016")
     parser.add_argument("--test-seeds", default="3000:3032")
@@ -96,16 +105,28 @@ def main():
 
     if args.workers < 1:
         args.workers = auto_workers()
+    neural = args.learner == "neural"
+    if args.workdir is None:
+        args.workdir = Path.home() / "neural-rl" if neural else Path.home()
     root = Path(args.workdir).resolve() / PACKAGE
     if not (root / "cluster.py").exists():
         print(f"extracting {args.zip} -> {root.parent}", flush=True)
         with zipfile.ZipFile(args.zip) as archive:
             archive.extractall(root.parent)
     py, cluster = sys.executable, root / "cluster.py"
+    setup = cluster
+    if neural:
+        # The overlay is fingerprinted: changing it after a run was initialized requires a new --run.
+        (root / "neural").mkdir(exist_ok=True)
+        for source in sorted((HERE / "neural-rl").glob("*.py")):
+            shutil.copyfile(source, root / "neural" / source.name)
+        cluster = root / "neural" / "neural_cluster.py"
+        stream([py, "-c", "import torch; print('torch', torch.__version__, '| CUDA:', torch.cuda.is_available(), '|', "
+                "torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'no GPU')"], root)
     t0 = time.perf_counter()
 
     stream([py, "-m", "pip", "install", "-q", "-r", "requirements.txt"], root)
-    stream([py, cluster, "setup"], root)
+    stream([py, setup, "setup"], root)
     if not args.skip_tests:
         stream([py, "-m", "unittest", "discover", "-s", "tests"], root)
 
@@ -114,7 +135,7 @@ def main():
         print(f"{run} already initialized - resuming with its saved seeds/config", flush=True)
     else:
         stream([py, cluster, "init", "--run", run, "--train-seeds", args.train_seeds,
-                "--validation-seeds", args.validation_seeds, "--test-seeds", args.test_seeds], root)
+                "--validation-seeds", args.validation_seeds, "--test-seeds", args.test_seeds, *args.init_args], root)
 
     base_plan = None
     if not args.skip_eval:
@@ -124,7 +145,8 @@ def main():
     # One round at a time so every checkpoint gets a frozen validation score as soon as it exists.
     summaries = {}
     for number in range(args.rounds):
-        stream([py, cluster, "train", "--run", run, "--rounds", number + 1, "--workers", args.workers], root)
+        stream([py, cluster, "train", "--run", run, "--rounds", number + 1, "--workers", args.workers,
+                *(["--device", args.device] if neural else [])], root)
         checkpoint = run / "checkpoints" / f"round_{number:04d}.json"
         print(f"round {number} merged at {(time.perf_counter() - t0) / 60:.1f} min -> {checkpoint}", flush=True)
         if args.skip_eval:
