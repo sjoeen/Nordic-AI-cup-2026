@@ -67,8 +67,14 @@ def play(job):
             cause = ("eaten" if near < 45 and energy > 3 else "old_age" if age > max_age
                      else "newborn_starved" if age < 30 else "starved")
             deaths.append(dict(t=round(env.time, 1), cause=cause, energy=round(energy, 1), age=round(age, 1), alive_after=len(alive)))
+    metrics = {k: round(v, 2) for k, v in policy.metrics.items() if k.startswith(("eg_", "late_", "emergency_"))}
+    gate = getattr(policy, "late_gate", None)  # candidates with a late-game gate: did it activate, and when
+    if gate is not None:
+        metrics["late_activated"] = int(gate.active)
+        if gate.activation:
+            metrics["late_activation_time"] = round(gate.activation["time"], 1)
     return dict(seed=seed, end=round(env.time, 1), score=round(float(state["score"]), 2), timeline=timeline, deaths=deaths, births=births,
-                metrics={k: v for k, v in policy.metrics.items() if k.startswith(("eg_", "emergency_"))})
+                metrics=metrics)
 
 
 def report(games):
@@ -139,7 +145,8 @@ def compare(games, reference, label):
     print("  per seed (score delta): " + "  ".join(f"{s}:{games[s]['score'] - reference[s]['score']:+.0f}" for s in seeds))
     used = [games[s].get("metrics", {}) for s in seeds]
     for key in sorted({k for m in used for k in m}):
-        print(f"  {key:<22} mean {statistics.mean(m.get(key, 0) for m in used):.1f}")
+        have = [m[key] for m in used if key in m]
+        print(f"  {key:<32} mean {statistics.mean(m.get(key, 0) for m in used):>8.1f}   (in {len(have)}/{len(used)} games, mean there {statistics.mean(have):.1f})")
 
 
 def load(path):

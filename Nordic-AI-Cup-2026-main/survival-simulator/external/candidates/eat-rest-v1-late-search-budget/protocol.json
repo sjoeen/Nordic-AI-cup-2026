@@ -1,0 +1,21 @@
+{
+  "name": "search_budget",
+  "baseline_sha256": "79069207333851ea391b4ed4e30e459bef980790f3c4390a6363d020ad83555f",
+  "candidate_sha256": "5a22bc1b3e6432a21cc01e942dbd0d93d22cc145941c541d514a1154e6ff1bd7",
+  "original_classes_unchanged": true,
+  "original_config_unchanged": true,
+  "gate": "20s mean population <=6 and mean energy <180, plus: after1400 at least two deaths belowage30 in120s, currentpop<=5 and a hungry fruitless agent; OR after1600 predator exposure>=50% and hungry-fruitless share>=70%. Latched.",
+  "seeds": [
+    1,
+    2,
+    3
+  ],
+  "test": "Unmodified stock run_local_game, actual HTTP, normal world/extinction or >3000s horizon",
+  "baseline_survival": [
+    1887.8,
+    1618.9,
+    1831.2
+  ],
+  "simulation_overrides": {},
+  "limitation": "Development seeds and historical controls; prediction model is not a guarantee of physical safety."
+}

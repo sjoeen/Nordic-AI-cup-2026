@@ -1,0 +1,167 @@
+--- preserved-v1
++++ search_budget
+@@ -1138,8 +1138,163 @@
+ 
+ CONFIG = json.loads('{"appetite_release": 70.0, "appetite_near": 80.0}')
+ 
++VARIANT='search_budget'
++from collections import deque
++
++
++class AttritionGate:
++    """Public evidence of failed replacement or sustained late threat pressure."""
++    def __init__(self):
++        self.previous={}
++        self.failures=deque()
++        self.window=deque()
++        self.sums=[0.]*5
++        self.active=False
++        self.activation=None
++
++    def update(self,states,now):
++        if self.active:return True
++        live={s['agent_id']:s for s in states}
++        for aid in self.previous.keys()-live.keys():
++            age,energy=self.previous[aid]
++            if age<30.:self.failures.append((now,aid,age,energy))
++        self.previous={aid:(s['age'],s['energy']) for aid,s in live.items()}
++        while self.failures and now-self.failures[0][0]>120.:self.failures.popleft()
++        if not states or now<1300.:return False
++        hungry=[s for s in states if s['energy']<100.]
++        values=(len(states),sum(s['energy'] for s in states)/len(states),
++            sum(any(o['type']=='Predator' for o in s['observations']) for s in states)/len(states),
++            sum(not any(o['type']=='Fruit' for o in s['observations']) for s in hungry),len(hungry))
++        self.window.append((now,values))
++        for i,v in enumerate(values):self.sums[i]+=v
++        while self.window and now-self.window[0][0]>20.01:
++            _,v=self.window.popleft()
++            for i,x in enumerate(v):self.sums[i]-=x
++        if now-self.window[0][0]<19.9:return False
++        n=len(self.window)
++        pop,energy,exposure=[self.sums[i]/n for i in range(3)]
++        fruitless=self.sums[3]/max(1.,self.sums[4])
++        replacement=(now>=1400. and len(states)<=5 and len(self.failures)>=2
++                     and any(s['energy']<100. and not any(o['type']=='Fruit' for o in s['observations']) for s in states))
++        pressure=now>=1600. and exposure>=.5 and fruitless>=.7
++        if pop<=6. and energy<180. and (replacement or pressure):
++            self.active=True
++            self.activation=dict(time=now,reason='failed_replacements' if replacement else 'food_and_threat_pressure',
++                recent_young_deaths=len(self.failures),mean_population=pop,mean_energy=energy,
++                predator_exposure=exposure,hungry_fruitless=fruitless)
++        return self.active
++
++
++class LateVariantsPolicy(AppetitePolicy):
++    def __init__(self,*args,**kwargs):
++        super().__init__(*args,**kwargs)
++        self.late_gate=AttritionGate()
++        self.late_views={}
++        self.late_events=[]
++        self.episodes={}
++
++    def record(self,kind,view,before=None,after=None,**details):
++        s=view['state'];aid=s['agent_id'];key=(kind,aid)
++        episode=self.episodes.get(key)
++        if episode is None or self.clock-episode['last']>.11:
++            episode=dict(event=kind,time=self.clock,last=self.clock,id=aid,age=s['age'],energy=s['energy'],
++                ticks=0,first_before=before,first_after=after,details=details)
++            self.episodes[key]=episode;self.late_events.append(episode)
++        episode['ticks']+=1;episode['last']=self.clock
++        self.metrics['late_'+kind+'_ticks']+=1
++
++    def allocate(self,views):
++        depth=self.config['harvest_depth']
++        active=self.late_gate.active and VARIANT=='short_routes'
++        if active:self.config['harvest_depth']=1
++        try:super().allocate(views)
++        finally:self.config['harvest_depth']=depth
++        self.late_views=views
++        if active:
++            for view in views.values():
++                if not view['escaping'] and view.get('eligible',True) and len(view['visible'])>=2:
++                    target=view['visible'].get(view['mem'].target_id)
++                    self.record('short_routes',view,target_distance=target['obs']['distance'] if target else None)
++
++    def apply_search_budget(self,view,action):
++        s,m=view['state'],view['mem']
++        if (m.last_mode!='SEARCH' or view['escaping'] or view['visible'] or m.colonist
++            or s['agent_id'] in self.retired_ids or s['age']>=60. or s['energy']>=80.
++            or action.spawn_agent or action.move_distance<=0.):return action
++        if any(o['type']=='Predator' and o['distance']<180. for o in s['observations']):return action
++        # At dt=.1, movement cost per second is .5*requested_distance.
++        # Age<60 avoids using an unobserved aging onset in this budget.
++        budget=max(1.,2.*(s['energy']/20.-1.-self.config['scan']/(2.*math.pi)*10.))
++        speed=min(action.move_distance,budget)
++        if speed>=action.move_distance-.01:return action
++        before=action.model_dump();action.move_distance=speed
++        terrain={'river':.3,'swamp':.5,'desert':.8}.get(s['biome'],1.)
++        m.last_move=(speed*terrain*math.cos(action.move_direction),speed*terrain*math.sin(action.move_direction))
++        m.last_mode='LATE_BUDGET_SEARCH'
++        self.record('search_budget',view,before,action.model_dump())
++        self.metrics['late_requested_movement_saving']+=(before['move_distance']-speed)*.05
++        return action
++
++    @staticmethod
++    def clearance(view,speed,angle):
++        terrain={'river':.3,'swamp':.5,'desert':.8}.get(view['state']['biome'],1.)
++        vx,vy=speed*terrain*math.cos(angle),speed*terrain*math.sin(angle)
++        minimum=ending=math.inf
++        for enemy in view['predators'][:5]:
++            ex,ey=enemy['velocity']
++            for t in (1.,2.,3.):
++                d=math.hypot(enemy['p'][0]+ex*(t+1)-vx*t,enemy['p'][1]+ey*(t+1)-vy*t)
++                minimum=min(minimum,d)
++            ending=min(ending,d)
++        return minimum,ending
++
++    def apply_evasion_budget(self,view,action):
++        s,m=view['state'],view['mem'];enemies=view['predators'][:5]
++        if (not view['escaping'] or m.last_mode!='CROWD_ESCAPE' or not enemies
++            or action.spawn_agent or any(not p['measured'] for p in enemies)
++            or min(p['obs']['distance'] for p in enemies)<60.):return action
++        old_min,old_end=self.clearance(view,action.move_distance,action.move_direction)
++        if old_min<45.:return action
++        minimum_required=max(45.,min(old_min,60.))
++        end_required=max(minimum_required,old_end-20.)
++        walk=min(s['speed'],s['sprint_speed'])
++        choices=sorted({walk*.5,walk*.75,walk,(walk+action.move_distance)/2.,action.move_distance})
++        speed=action.move_distance;new_min=old_min;new_end=old_end
++        for candidate in choices:
++            if candidate>=action.move_distance-.01:continue
++            # A shorter step may collide where the original endpoint did not.
++            direction,_=self.slide((math.cos(action.move_direction),math.sin(action.move_direction)),view,candidate)
++            if abs(wrap(math.atan2(direction[1],direction[0])-action.move_direction))>1e-6:continue
++            near,end=self.clearance(view,candidate,action.move_direction)
++            if near>=minimum_required and end>=end_required:
++                speed=candidate;new_min=near;new_end=end;break
++        if speed>=action.move_distance-.01:return action
++        before=action.model_dump();action.move_distance=speed
++        terrain={'river':.3,'swamp':.5,'desert':.8}.get(s['biome'],1.)
++        m.last_move=(speed*terrain*math.cos(action.move_direction),speed*terrain*math.sin(action.move_direction))
++        m.last_mode='LATE_EVASION_BUDGET'
++        cost=lambda d:.05*min(d,s['speed'])+.5*max(0.,d-s['speed'])
++        self.metrics['late_requested_movement_saving']+=cost(before['move_distance'])-cost(speed)
++        self.record('evasion_budget',view,before,action.model_dump(),old_min=old_min,new_min=new_min,
++            old_end=old_end,new_end=new_end,minimum_required=minimum_required,end_required=end_required)
++        return action
++
++    def decide_all(self,states,sim_time=None):
++        now=float(sim_time) if sim_time is not None else self.clock+.1
++        if now<self.clock:self.late_gate=AttritionGate();self.episodes={}
++        already=self.late_gate.active;self.late_gate.update(states,now)
++        if self.late_gate.active and not already:self.late_events.append(dict(event='late_game_start',**self.late_gate.activation))
++        actions=super().decide_all(states,sim_time)
++        if self.late_gate.active:
++            for action in actions:
++                view=self.late_views[action.agent_id]
++                if VARIANT=='search_budget':self.apply_search_budget(view,action)
++                elif VARIANT=='evasion_budget':self.apply_evasion_budget(view,action)
++        return actions
++
++
+ def make_policy():
+-    return AppetitePolicy('appetite', **CONFIG)
++    return LateVariantsPolicy('appetite', **CONFIG)
+ 
+ 
+ from threading import RLock
