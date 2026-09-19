@@ -1,0 +1,7 @@
+{
+ "m_c008": {"rest_radius": 54.507, "dispersal_distance": 117.183},
+ "m_c078": {"harvest_switch": 9.866, "appetite_level": 229.319, "dispersal_distance": 137.769},
+ "m_008_078": {"rest_radius": 54.507, "dispersal_distance": 127.0, "harvest_switch": 9.866, "appetite_level": 229.319},
+ "m_008_024": {"rest_radius": 54.507, "dispersal_distance": 117.183, "birth_energy": 168.619, "population": 7, "birth_floor": 133.445},
+ "m_008_047": {"rest_radius": 54.507, "dispersal_distance": 117.183, "harvest_switch": 4.4, "maximum_birth_gap": 32.12}
+}
