@@ -70,6 +70,7 @@ def run_one(job):
     t0 = time.perf_counter()
     state = sim.step([])
     peak, births, deaths, env = 0, 0, [], sim.env
+    genes, next_sample = {}, 250.
     while state["num_agents"] > 0 and env.time <= MAX_SIM_TIME:
         states = [o for o in state["observations"] if o is not None]
         peak = max(peak, len(states))
@@ -79,6 +80,9 @@ def run_one(job):
         state = sim.step([(a.agent_id, ActionRequest(**a.model_dump())) for a in actions])
         alive = {a.agent_id for a in env.agents}
         births += len(alive - before.keys())
+        if env.time >= next_sample and env.agents:  # colony's mean walking-speed gene, to see selection act
+            genes[f"speed_t{int(next_sample)}"] = round(statistics.mean(min(a.speed, a.sprint_speed) for a in env.agents), 2)
+            next_sample += 250.
         for aid in before.keys() - alive:
             x, y, energy, age, max_age = before[aid]
             near = min((math.hypot(x - px, y - py) for px, py in predators), default=1e9)
@@ -92,7 +96,8 @@ def run_one(job):
     final = {"final300_" + c: sum(d["cause"] == c and d["t"] > end - 300 for d in deaths) for c in causes}
     row = dict(variant=name, seed=seed, score=round(float(state["score"]), 2), extinction_time=round(end, 1),
                peak_agents=peak, births=births, **total, **final, predators_at_end=len(env.predators),
-               trees_at_end=len(env.trees), fruits_at_end=len(env.fruits), wall_clock_sec=round(time.perf_counter() - t0, 1))
+               trees_at_end=len(env.trees), fruits_at_end=len(env.fruits), wall_clock_sec=round(time.perf_counter() - t0, 1),
+               **genes, **{k: v for k, v in policy.metrics.items() if k.startswith(("sel_", "fedbirth_"))})
     print(json.dumps(row), flush=True)
     return row, deaths[-8:]
 
@@ -117,7 +122,8 @@ if __name__ == "__main__":
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     with open(out, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0]))
+        fields = list(dict.fromkeys(key for r in rows for key in r))  # games differ in length, so in sampled columns
+        writer = csv.DictWriter(f, fieldnames=fields, restval="")
         writer.writeheader()
         writer.writerows(rows)
     with open(str(out) + ".deaths.jsonl", "w") as f:
@@ -135,4 +141,12 @@ if __name__ == "__main__":
         avg = lambda key: statistics.mean(r[key] for r in mine)
         print(f"{name:<14}{avg('births'):>8.0f}{avg('eaten'):>8.1f}{avg('old_age'):>9.1f}{avg('newborn_starved'):>17.1f}{avg('starved'):>9.1f}"
               f"   | {avg('final300_eaten'):.1f} / {avg('final300_old_age'):.1f} / {avg('final300_newborn_starved'):.1f} / {avg('final300_starved'):.1f}")
+    samples = sorted({k for r in rows for k in r if k.startswith("speed_t")}, key=lambda k: int(k[7:]))[:6]
+    if samples:
+        print("\nmean walking-speed gene of the colony (games still alive at that time)")
+        print(f"{'variant':<14}" + "".join(f"{k[6:]:>9}" for k in samples))
+        for name, _ in variants:
+            mine = [r for r in rows if r["variant"] == name]
+            cells = [[r[k] for r in mine if k in r] for k in samples]
+            print(f"{name:<14}" + "".join(f"{statistics.mean(v):>9.2f}" if v else f"{'-':>9}" for v in cells))
     print(f"wrote {out}")
