@@ -3,10 +3,10 @@ How does eat-rest-v1 die? Plays the untouched baseline (or --set overrides) on f
 timeline of the world and the colony plus every death and birth, then prints what changes in the run-up to extinction.
 
 Diagnostic for choosing the next behaviour change after tune_v1 found the numeric settings flat. Seeds 11000+ (unused by
-the tuners: 5000-7063, 8000-10063). Resumable like the tuners: finished games are appended to <out>/games.jsonl.
+tune_v1: 5000-7063). Resumable like the tuners: finished games are appended to <out>/games.jsonl.
     python external/candidates/endgame_probe.py --out logs/endgame                 # 64 games, then the report
     python external/candidates/endgame_probe.py --out logs/endgame --seeds 0       # report only, from the stored games
-    python external/candidates/endgame_probe.py --out logs/endgame_eg --candidate eat-rest-endgame --compare logs/endgame
+    python external/candidates/endgame_probe.py --out logs/eg2/<name> --candidate <folder> --compare logs/eg2/base
 --brief skips the long report (progress and the --compare block only). --candidate picks another folder of external/candidates; --compare prints the paired per-seed difference against the
 games stored in another --out folder (same seeds), which is how a behaviour change is judged.
 Mechanism study: nothing is written to results/.
