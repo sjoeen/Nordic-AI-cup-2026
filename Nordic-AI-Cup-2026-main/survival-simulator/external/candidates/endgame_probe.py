@@ -7,7 +7,7 @@ the tuners: 5000-7063, 8000-10063). Resumable like the tuners: finished games ar
     python external/candidates/endgame_probe.py --out logs/endgame                 # 64 games, then the report
     python external/candidates/endgame_probe.py --out logs/endgame --seeds 0       # report only, from the stored games
     python external/candidates/endgame_probe.py --out logs/endgame_eg --candidate eat-rest-endgame --compare logs/endgame
---candidate picks another folder of external/candidates; --compare prints the paired per-seed difference against the
+--brief skips the long report (progress and the --compare block only). --candidate picks another folder of external/candidates; --compare prints the paired per-seed difference against the
 games stored in another --out folder (same seeds), which is how a behaviour change is judged.
 Mechanism study: nothing is written to results/.
 """
@@ -152,6 +152,7 @@ if __name__ == "__main__":
     p.add_argument("--seeds", type=int, default=64)
     p.add_argument("--seed-base", type=int, default=11000)
     p.add_argument("--candidate", default=CANDIDATE, help="folder under external/candidates")
+    p.add_argument("--brief", action="store_true", help="skip the long report: progress lines and the --compare block only")
     p.add_argument("--compare", help="another --out folder holding the same seeds (usually the baseline's)")
     p.add_argument("--set", default="{}", help='json overrides on top of the shipped config, e.g. \'{"population": 4}\'')
     p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 2))
@@ -172,6 +173,7 @@ if __name__ == "__main__":
             if done % 8 == 0 or done == len(jobs):
                 print(f"  [{(time.perf_counter() - t0) / 60:5.1f} min] {done}/{len(jobs)} games", flush=True)
     games = {s: g for s, g in games.items() if a.seed_base <= s < a.seed_base + max(a.seeds, 1) or not a.seeds}
-    report(list(games.values()))
+    if not a.brief:
+        report(list(games.values()))
     if a.compare:
         compare(games, load(Path(a.compare) / "games.jsonl"), a.compare)
