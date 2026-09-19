@@ -7,3 +7,4 @@ logs/
 .pytest_cache/
 .ipynb_checkpoints/
 .env
+cluster-rl-training/
