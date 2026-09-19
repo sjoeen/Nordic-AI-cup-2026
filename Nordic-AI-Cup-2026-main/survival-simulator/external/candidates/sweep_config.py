@@ -6,11 +6,18 @@ run_candidate.py (SimulationCore(seed, starting_predators=0), 3000 s limit, one 
     python external/candidates/sweep_config.py --seeds 2000:2016 --out logs/sweep_pop.csv \
         --variant base --variant floor4:population_floor=4 --variant "slow:population_decay=1800,population=8"
 
+Every game is also a post-mortem (read from the engine from outside, never altering it): births,
+deaths by cause over the whole game and over the final 300 s, and the last deaths in detail
+(<out>.deaths.jsonl). Causes: eaten = an awake-or-not predator within 45 units at death with energy
+left; old_age = past the agent's hidden max_age; newborn_starved = starved younger than 30 s;
+starved = the rest.
+
 Mechanism study: writes wherever --out points (use logs/), never results/index.csv.
 """
 import argparse
 import csv
 import json
+import math
 import os
 import statistics
 import sys
@@ -62,16 +69,32 @@ def run_one(job):
     sim = SimulationCore(seed=seed, starting_predators=0)
     t0 = time.perf_counter()
     state = sim.step([])
-    peak = 0
-    while state["num_agents"] > 0 and sim.env.time <= MAX_SIM_TIME:
+    peak, births, deaths, env = 0, 0, [], sim.env
+    while state["num_agents"] > 0 and env.time <= MAX_SIM_TIME:
         states = [o for o in state["observations"] if o is not None]
         peak = max(peak, len(states))
-        actions = policy.decide_all(states, sim.env.time)
+        actions = policy.decide_all(states, env.time)
+        before = {a.agent_id: (a.x, a.y, a.energy, a.age, a.max_age) for a in env.agents}
+        predators = [(q.x, q.y) for q in env.predators]
         state = sim.step([(a.agent_id, ActionRequest(**a.model_dump())) for a in actions])
-    row = dict(variant=name, seed=seed, score=round(float(state["score"]), 2), extinction_time=round(sim.env.time, 1),
-               peak_agents=peak, predators_at_end=len(sim.env.predators), wall_clock_sec=round(time.perf_counter() - t0, 1))
+        alive = {a.agent_id for a in env.agents}
+        births += len(alive - before.keys())
+        for aid in before.keys() - alive:
+            x, y, energy, age, max_age = before[aid]
+            near = min((math.hypot(x - px, y - py) for px, py in predators), default=1e9)
+            cause = ("eaten" if near < 45 and energy > 3 else "old_age" if age > max_age
+                     else "newborn_starved" if age < 30 else "starved")
+            deaths.append(dict(t=round(env.time, 1), cause=cause, energy=round(energy, 1), age=round(age, 1),
+                               nearest_predator=round(near), alive_after=len(alive)))
+    end = env.time
+    causes = ("eaten", "old_age", "newborn_starved", "starved")
+    total = {c: sum(d["cause"] == c for d in deaths) for c in causes}
+    final = {"final300_" + c: sum(d["cause"] == c and d["t"] > end - 300 for d in deaths) for c in causes}
+    row = dict(variant=name, seed=seed, score=round(float(state["score"]), 2), extinction_time=round(end, 1),
+               peak_agents=peak, births=births, **total, **final, predators_at_end=len(env.predators),
+               trees_at_end=len(env.trees), fruits_at_end=len(env.fruits), wall_clock_sec=round(time.perf_counter() - t0, 1))
     print(json.dumps(row), flush=True)
-    return row
+    return row, deaths[-8:]
 
 
 if __name__ == "__main__":
@@ -84,10 +107,12 @@ if __name__ == "__main__":
     a = p.parse_args()
     seeds, variants = parse_seeds(a.seeds), [parse_variant(v) for v in a.variant]
     jobs = [(a.candidate, name, overrides, seed) for name, overrides in variants for seed in seeds]
-    rows = []
+    rows, last_deaths = [], []
     with ProcessPoolExecutor(max_workers=a.workers) as pool:
         for future in as_completed([pool.submit(run_one, job) for job in jobs]):
-            rows.append(future.result())
+            row, last = future.result()
+            rows.append(row)
+            last_deaths.append(dict(variant=row["variant"], seed=row["seed"], extinction_time=row["extinction_time"], last_deaths=last))
     rows.sort(key=lambda r: (r["variant"], r["seed"]))
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -95,6 +120,8 @@ if __name__ == "__main__":
         writer = csv.DictWriter(f, fieldnames=list(rows[0]))
         writer.writeheader()
         writer.writerows(rows)
+    with open(str(out) + ".deaths.jsonl", "w") as f:
+        f.writelines(json.dumps(d) + "\n" for d in sorted(last_deaths, key=lambda d: (d["variant"], d["seed"])))
     reference = {r["seed"]: r["extinction_time"] for r in rows if r["variant"] == variants[0][0]}
     print(f"\n{'variant':<14}{'mean':>8}{'median':>8}{'min':>8}{'max':>8}{'vs ' + variants[0][0]:>12}{'better':>8}")
     for name, _ in variants:
@@ -102,4 +129,10 @@ if __name__ == "__main__":
         delta = [t[s] - reference[s] for s in seeds]
         print(f"{name:<14}{statistics.mean(t.values()):>8.0f}{statistics.median(t.values()):>8.0f}{min(t.values()):>8.0f}"
               f"{max(t.values()):>8.0f}{statistics.mean(delta):>+12.0f}{sum(d > 0 for d in delta):>5}/{len(seeds)}")
+    print(f"\nmean per game{'':<1}{'births':>8}{'eaten':>8}{'old_age':>9}{'newborn_starved':>17}{'starved':>9}   | final 300 s: eaten / old / newborn / starved")
+    for name, _ in variants:
+        mine = [r for r in rows if r["variant"] == name]
+        avg = lambda key: statistics.mean(r[key] for r in mine)
+        print(f"{name:<14}{avg('births'):>8.0f}{avg('eaten'):>8.1f}{avg('old_age'):>9.1f}{avg('newborn_starved'):>17.1f}{avg('starved'):>9.1f}"
+              f"   | {avg('final300_eaten'):.1f} / {avg('final300_old_age'):.1f} / {avg('final300_newborn_starved'):.1f} / {avg('final300_starved'):.1f}")
     print(f"wrote {out}")
