@@ -1,4 +1,13 @@
-# Eat-Rest v1
+# Eat-Rest v1 (challenge 1 survival simulation)
+
+## Achievements
+
+Eat-Rest v1 achieved a **top 10 score overall** and ranked **2nd in Norway** in the **Nordic AI Cup**. The competition included **112 teams overall**, with a Discord community of approximately **300 members**.
+
+| Achievement | Placement |
+| --- | --- |
+| Overall score | **Top 10** |
+| Norwegian ranking | **2nd** |
 
 A stateful, rule-based controller for a multi-agent survival simulation. Each tick, it combines the agents' public observations, assigns fruit targets, chooses movement, and decides which agents should reproduce.
 
